@@ -1,25 +1,25 @@
 import org.scalajs.linker.interface.ModuleSplitStyle
 import sbtcrossproject.CrossPlugin.autoImport.{ crossProject, CrossType }
 
-val scala212 = "2.12.14"
+val scala212 = "2.12.16"
 val scala213 = "2.13.8"
-val scala3   = "3.1.1"
+val scala3   = "3.1.3"
 val allScala = Seq(scala212, scala213, scala3)
 
 val akkaVersion            = "2.6.19"
 val catsEffect2Version     = "2.5.4"
-val catsEffect3Version     = "3.3.12"
+val catsEffect3Version     = "3.3.13"
 val catsMtlVersion         = "1.2.1"
 val circeVersion           = "0.14.2"
 val http4sVersion          = "0.23.12"
 val laminextVersion        = "0.14.3"
 val magnoliaVersion        = "0.17.0"
 val mercatorVersion        = "0.2.1"
-val playVersion            = "2.8.15"
+val playVersion            = "2.8.16"
 val playJsonVersion        = "2.9.2"
 val sttpVersion            = "3.3.18"
 val tapirVersion           = "1.0.1"
-val zioVersion             = "1.0.14"
+val zioVersion             = "1.0.15"
 val zioInteropCats2Version = "2.5.1.0"
 val zioInteropCats3Version = "3.2.9.1"
 val zioConfigVersion       = "2.0.4"
@@ -112,7 +112,7 @@ lazy val core = project
     libraryDependencies ++= {
       if (scalaVersion.value == scala3) {
         Seq(
-          "org.typelevel" %% "cats-parse" % "0.3.7"
+          "org.typelevel" %% "cats-parse" % "0.3.8"
         )
       } else {
         Seq(
@@ -351,7 +351,7 @@ lazy val clientJS  = client.js
     libraryDependencies ++= {
       Seq(
         "org.scala-js"      %%% "scalajs-java-securerandom" % "1.0.0" cross CrossVersion.for3Use2_13,
-        "io.github.cquiroz" %%% "scala-java-time"           % "2.3.0" % Test
+        "io.github.cquiroz" %%% "scala-java-time"           % "2.4.0" % Test
       )
     }
   )
