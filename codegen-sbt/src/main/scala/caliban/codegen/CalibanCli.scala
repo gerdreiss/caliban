@@ -1,12 +1,11 @@
 package caliban.codegen
 
 import caliban.tools.Codegen.GenType
-import caliban.tools._
+import caliban.tools.*
 import sbt.Keys.commands
 import sbt.{ Command, State }
-import zio.blocking.Blocking
-import zio.console.{ putStrLn, Console }
-import zio.{ RIO, Runtime }
+import zio.Console.printLine
+import zio.{ Runtime, Task, Unsafe }
 
 object CalibanCli {
   lazy val genSchemaCommand =
@@ -29,11 +28,15 @@ object CalibanCli {
     genType: GenType
   ): Command =
     Command.args(name, helpMsg) { (state: State, args: Seq[String]) =>
-      Runtime.default.unsafeRun(
-        execGenCommand(helpMsg, args.toList, genType)
-          .catchAll(reason => putStrLn(reason.toString) *> putStrLn(reason.getStackTrace.mkString("\n")))
-          .as(1)
-      )
+      Unsafe.unsafe { implicit u =>
+        Runtime.default.unsafe
+          .run(
+            execGenCommand(helpMsg, args.toList, genType)
+              .catchAll(reason => printLine(reason.toString) *> printLine(reason.getStackTrace.mkString("\n")))
+              .as(1)
+          )
+          .getOrThrowFiberFailure()
+      }
       state
     }
 
@@ -60,7 +63,7 @@ object CalibanCli {
        |
        |$commonHelp
        |
-       |By default, each Query and Mutation will be wrapped into a `zio.UIO` effect. 
+       |By default, each Query and Mutation will be wrapped into a `zio.UIO` effect.
        |This can be overridden by providing an alternative effect with the `--effect` option.
        |The --abstractEffectType flag can also be used to indicate that the effect
        |type is abstract, so that it will be added as a type parameter to the generated
@@ -85,15 +88,15 @@ object CalibanCli {
     helpMsg: String,
     args: List[String],
     genType: GenType
-  ): RIO[Console with Blocking, Unit] =
+  ): Task[Unit] =
     Options.fromArgs(args).flatMap {
       case Some(arguments) =>
         for {
-          _ <- putStrLn(s"Generating code for ${arguments.schemaPath}")
+          _ <- printLine(s"Generating code for ${arguments.schemaPath}")
           _ <- Codegen.generate(arguments, genType)
-          _ <- putStrLn(s"Code generation done")
+          _ <- printLine(s"Code generation done")
         } yield ()
-      case None            => putStrLn(helpMsg)
+      case None            => printLine(helpMsg)
     }
   def projectSettings          = Seq(commands ++= Seq(genSchemaCommand, genClientCommand))
 }

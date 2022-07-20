@@ -11,8 +11,6 @@ import org.http4s.blaze.server.BlazeServerBuilder
 import org.http4s.server.middleware.CORS
 import sttp.tapir.server.ServerEndpoint
 import zio._
-import zio.blocking.Blocking
-import zio.clock.Clock
 import zio.interop.catz._
 
 object ExampleApp extends CatsApp {
@@ -36,9 +34,9 @@ object ExampleApp extends CatsApp {
   val graphql2: GraphQL[Any] =
     addBookEndpoint.toGraphQL |+| deleteBookEndpoint.toGraphQL |+| booksListingEndpoint.toGraphQL
 
-  type MyTask[A] = RIO[Clock with Blocking, A]
+  type MyTask[A] = Task[A]
 
-  override def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
+  override def run =
     (for {
       interpreter <- graphql.interpreter
       _           <- BlazeServerBuilder[MyTask]
@@ -50,7 +48,7 @@ object ExampleApp extends CatsApp {
                          ).orNotFound
                        )
                        .resource
-                       .toManagedZIO
-                       .useForever
+                       .toScopedZIO
+                       .forever
     } yield ()).exitCode
 }

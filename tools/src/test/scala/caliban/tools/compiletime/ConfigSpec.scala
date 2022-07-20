@@ -4,9 +4,8 @@ import caliban.tools.CalibanCommonSettings
 import caliban.tools.Codegen.GenType
 import caliban.tools.compiletime.Config._
 import zio.test._
-import zio.test.environment.TestEnvironment
 
-object ConfigSpec extends DefaultRunnableSpec {
+object ConfigSpec extends ZIOSpecDefault {
 
   private val fullExample: ClientGenerationSettings =
     ClientGenerationSettings(
@@ -106,7 +105,7 @@ object ConfigSpec extends DefaultRunnableSpec {
       )
     )
 
-  override def spec: ZSpec[TestEnvironment, Any] =
+  override def spec =
     suite("Config spec")(
       suite("ClientGenerationSettings")(
         toCalibanCommonSettingsSpec,

@@ -3,13 +3,10 @@ package caliban
 import caliban.GraphQL._
 import caliban.schema.Annotations.GQLInterface
 import zio._
-import zio.clock._
-import zio.console._
-import zio.test.Assertion._
 import zio.test._
-import zio.test.environment.TestEnvironment
+import zio.test.Assertion._
 
-object Scala3SpecificSpec extends DefaultRunnableSpec {
+object Scala3SpecificSpec extends ZIOSpecDefault {
 
   enum MyEnum {
     case A, B, C
@@ -26,9 +23,9 @@ object Scala3SpecificSpec extends DefaultRunnableSpec {
     case B(a: Int)
   }
 
-  override def spec: ZSpec[TestEnvironment, Any] =
+  override def spec =
     suite("Scala3SpecificSpec")(
-      testM("Scala 3 enum") {
+      test("Scala 3 enum") {
         case class Queries(item: MyEnum)
         val api         = graphQL(RootResolver(Queries(MyEnum.A)))
         val interpreter = api.interpreter
@@ -36,11 +33,11 @@ object Scala3SpecificSpec extends DefaultRunnableSpec {
           """query {
             |  item
             |}""".stripMargin
-        assertM(interpreter.flatMap(_.execute(query)).map(_.data.toString))(
-          equalTo("""{"item":"A"}""")
-        )
+        interpreter.flatMap(_.execute(query)).map { response =>
+          assertTrue(response.data.toString == """{"item":"A"}""")
+        }
       },
-      testM("Scala 3 union") {
+      test("Scala 3 union") {
         case class Queries(item: MyADT)
         val api         = graphQL(RootResolver(Queries(MyADT.A(1))))
         val interpreter = api.interpreter
@@ -55,11 +52,11 @@ object Scala3SpecificSpec extends DefaultRunnableSpec {
             |     }
             |  }
             |}""".stripMargin
-        assertM(interpreter.flatMap(_.execute(query)).map(_.data.toString))(
-          equalTo("""{"item":{"a":1}}""")
-        )
+        interpreter.flatMap(_.execute(query)).map { response =>
+          assertTrue(response.data.toString == """{"item":{"a":1}}""")
+        }
       },
-      testM("Scala 3 interface") {
+      test("Scala 3 interface") {
         case class Queries(item: MyADT2)
         val api         = graphQL(RootResolver(Queries(MyADT2.A(1))))
         val interpreter = api.interpreter
@@ -69,14 +66,18 @@ object Scala3SpecificSpec extends DefaultRunnableSpec {
             |    a
             |  }
             |}""".stripMargin
-        assertM(interpreter.flatMap(_.execute(query)).map(_.data.toString))(
-          equalTo("""{"item":{"a":1}}""")
-        )
+        interpreter.flatMap(_.execute(query)).map { response =>
+          assertTrue(response.data.toString == """{"item":{"a":1}}""")
+        }
       },
-      testM("Derive R without imports") {
-        case class Inner(io: RIO[Console, String])
-        case class Queries(io: RIO[Clock, Int], inner: Inner)
-        val api         = graphQL[Clock with Console, Queries, Unit, Unit](RootResolver(Queries(UIO(1), Inner(UIO("ok")))))
+      test("Derive R without imports") {
+        trait S1
+        trait S2
+        case class Inner(io: RIO[S1, String])
+        case class Queries(io: RIO[S2, Int], inner: Inner)
+        val api         = graphQL[S1 with S2, Queries, Unit, Unit](
+          RootResolver(Queries(ZIO.succeed(1), Inner(ZIO.succeed("ok"))))
+        )
         val interpreter = api.interpreter
         val query       =
           """query {
@@ -85,9 +86,12 @@ object Scala3SpecificSpec extends DefaultRunnableSpec {
             |    io
             |  }
             |}""".stripMargin
-        assertM(interpreter.flatMap(_.execute(query)).map(_.data.toString))(
-          equalTo("""{"io":1,"inner":{"io":"ok"}}""")
-        )
+        interpreter
+          .flatMap(_.execute(query))
+          .map { response =>
+            assertTrue(response.data.toString == """{"io":1,"inner":{"io":"ok"}}""")
+          }
+          .provide(ZLayer.succeed(new S1 {}) ++ ZLayer.succeed(new S2 {}))
       }
     )
 }

@@ -11,7 +11,7 @@ You should also be careful when using stitching since it's very easy to pull in 
 In order to use stitching, add `caliban-tools` to your dependencies:
 
 ```scala
-libraryDependencies += "com.github.ghostdogpr" %% "caliban-tools" % "1.4.1"
+libraryDependencies += "com.github.ghostdogpr" %% "caliban-tools" % "2.0.0"
 ```
 
 ## Stitching in Action
@@ -23,21 +23,21 @@ import caliban._
 import caliban.schema._
 import zio._
 
-object StitchingExample extends GenericSchema[ZEnv] {
+object StitchingExample extends GenericSchema[Any] {
   case class AppUser(id: String, name: String, featuredRepository: Repository)
   case class Repository(owner: String, name: String)
 
   case class GetUserQuery(name: String, repository: String)
 
   case class Queries(
-    GetUser: GetUserQuery => URIO[ZEnv, AppUser]
+    GetUser: GetUserQuery => UIO[AppUser]
   )
 
-  val graphQL: GraphQL[ZEnv] = GraphQL.graphQL(
+  val graphQL: GraphQL[Any] = GraphQL.graphQL(
     RootResolver(
       Queries(
         GetUser = query =>
-          random.nextUUID.map(uuid =>
+          Random.nextUUID.map(uuid =>
             AppUser(
               id = uuid.toString,
               name = query.name,
@@ -73,7 +73,7 @@ In order to do this we're going to do a couple of things:
     remoteSchemaResolvers = RemoteSchemaResolver.fromSchema(remoteSchema)
   } yield {
     // 3
-    implicit val githubProfileSchema: Schema[ZEnv, Repository] =
+    implicit val githubProfileSchema: Schema[Any, Repository] =
       remoteSchemaResolvers
         .remoteResolver("Repository")(
           // 4
@@ -157,7 +157,7 @@ val apiRequest =
 And now we can use our new `apiRequest` when resolving our `Schema[ZEnv, Repository]`:
 
 ```scala
-implicit val githubProfileSchema: Schema[ZEnv, Repository] =
+implicit val githubProfileSchema: Schema[Any, Repository] =
   remoteSchemaResolvers
   .remoteResolver("Repository")(
       RemoteResolver.fromFunction((r: ResolveRequest[Repository]) =>

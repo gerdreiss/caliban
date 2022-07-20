@@ -8,15 +8,13 @@ import cats.effect.{ IO, Ref }
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.effect.unsafe.implicits.global
-import zio.{ Runtime, ZIO }
-import zio.test.Assertion._
+import zio.{ Runtime, ZEnvironment, ZIO }
 import zio.test._
-import zio.test.environment.TestEnvironment
 
-object CatsInteropSpec extends DefaultRunnableSpec {
+object CatsInteropSpec extends ZIOSpecDefault {
 
-  override def spec: ZSpec[TestEnvironment, Any] = suite("CatsInteropSpec")(
-    testM("contextual interop: inject an environment") {
+  override def spec = suite("CatsInteropSpec")(
+    test("contextual interop: inject an environment") {
       case class SecurityContext(isAdmin: Boolean)
       case class LogContext(traceId: String)
       case class RootContext(security: SecurityContext, log: LogContext)
@@ -32,10 +30,11 @@ object CatsInteropSpec extends DefaultRunnableSpec {
         }
 
       for {
-        contextual <- ZIO.effectTotal(main(inner)(Runtime.default.as(rootCtx)).run(rootCtx).unsafeRunSync())
-      } yield assert(contextual)(equalTo(List(rootCtx, inner, rootCtx)))
+        contextual <-
+          ZIO.succeed(main(inner)(Runtime.default.withEnvironment(ZEnvironment(rootCtx))).run(rootCtx).unsafeRunSync())
+      } yield assertTrue(contextual == List(rootCtx, inner, rootCtx))
     },
-    testM("plain interop: do not inject an environment") {
+    test("plain interop: do not inject an environment") {
       case class Context(traceId: String)
 
       type Effect[A] = Kleisli[IO, Context, A]
@@ -49,8 +48,9 @@ object CatsInteropSpec extends DefaultRunnableSpec {
         }
 
       for {
-        contextual <- ZIO.effectTotal(main(inner)(Runtime.default.as(rootCtx)).run(rootCtx).unsafeRunSync())
-      } yield assert(contextual)(equalTo(List(rootCtx, rootCtx, rootCtx)))
+        contextual <-
+          ZIO.succeed(main(inner)(Runtime.default.withEnvironment(ZEnvironment(rootCtx))).run(rootCtx).unsafeRunSync())
+      } yield assertTrue(contextual == List(rootCtx, rootCtx, rootCtx))
     }
   )
 

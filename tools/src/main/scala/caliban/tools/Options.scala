@@ -1,8 +1,8 @@
 package caliban.tools
 
-import zio.config.magnolia.DeriveConfigDescriptor.descriptor
+import zio.{ UIO, ZIO }
+import zio.config.magnolia.Descriptor
 import zio.config.{ read, ConfigDescriptor, ConfigSource }
-import zio.UIO
 
 final case class Options(
   schemaPath: String,
@@ -49,7 +49,7 @@ object Options {
             keyDelimiter = Some('.'),
             valueDelimiter = Some(',')
           )
-        val configDescriptor: ConfigDescriptor[RawOptions] = descriptor[RawOptions] from configSource
+        val configDescriptor: ConfigDescriptor[RawOptions] = Descriptor.descriptor[RawOptions] from configSource
 
         read(configDescriptor).map { rawOpts =>
           Options(
@@ -84,6 +84,6 @@ object Options {
             rawOpts.preserveInputNames
           )
         }.option
-      case _                             => UIO(None)
+      case _                             => ZIO.none
     }
 }

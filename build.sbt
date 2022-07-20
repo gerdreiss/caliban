@@ -6,26 +6,26 @@ val scala213 = "2.13.8"
 val scala3   = "3.1.3"
 val allScala = Seq(scala212, scala213, scala3)
 
-val akkaVersion            = "2.6.19"
-val catsEffect2Version     = "2.5.4"
-val catsEffect3Version     = "3.3.14"
-val catsMtlVersion         = "1.2.1"
-val circeVersion           = "0.14.2"
-val http4sVersion          = "0.23.12"
-val laminextVersion        = "0.14.3"
-val magnoliaVersion        = "0.17.0"
-val mercatorVersion        = "0.2.1"
-val playVersion            = "2.8.16"
-val playJsonVersion        = "2.9.2"
-val sttpVersion            = "3.3.18"
-val tapirVersion           = "1.0.1"
-val zioVersion             = "1.0.15"
-val zioInteropCats2Version = "2.5.1.0"
-val zioInteropCats3Version = "3.2.9.1"
-val zioConfigVersion       = "2.0.4"
-val zqueryVersion          = "0.2.10"
-val zioJsonVersion         = "0.1.5"
-val zioHttpVersion         = "1.0.0.0-RC27"
+val akkaVersion               = "2.6.19"
+val catsEffect3Version        = "3.3.14"
+val catsMtlVersion            = "1.2.1"
+val circeVersion              = "0.14.2"
+val http4sVersion             = "0.23.12"
+val laminextVersion           = "0.14.3"
+val magnoliaVersion           = "0.17.0"
+val mercatorVersion           = "0.2.1"
+val playVersion               = "2.8.16"
+val playJsonVersion           = "2.9.2"
+val sttpVersion               = "3.7.0"
+val tapirVersion              = "1.0.2"
+val zioVersion                = "2.0.0"
+val zioInteropCats2Version    = "22.0.0.0"
+val zioInteropCats3Version    = "3.3.0"
+val zioInteropReactiveVersion = "2.0.0"
+val zioConfigVersion          = "3.0.1"
+val zqueryVersion             = "0.3.0"
+val zioJsonVersion            = "0.3.0-RC10"
+val zioHttpVersion            = "2.0.0-RC10"
 
 inThisBuild(
   List(
@@ -33,9 +33,8 @@ inThisBuild(
     crossScalaVersions       := allScala,
     organization             := "com.github.ghostdogpr",
     homepage                 := Some(url("https://github.com/ghostdogpr/caliban")),
-    licenses                 := List(
-      "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
-    ),
+    licenses                 := List(License.Apache2),
+    resolvers += "Sonatype OSS Snapshots" at "https://s01.oss.sonatype.org/content/repositories/snapshots",
     Test / parallelExecution := false,
     scmInfo                  := Some(
       ScmInfo(
@@ -119,8 +118,7 @@ lazy val core = project
           "com.propensive"    %% "magnolia"  % magnoliaVersion,
           "com.propensive"    %% "mercator"  % mercatorVersion,
           "com.lihaoyi"       %% "fastparse" % "2.3.3",
-          "com.typesafe.play" %% "play-json" % playJsonVersion % Optional,
-          "dev.zio"           %% "zio-json"  % zioJsonVersion  % Optional
+          "com.typesafe.play" %% "play-json" % playJsonVersion % Optional
         )
       }
     } ++
@@ -128,11 +126,12 @@ lazy val core = project
         "dev.zio"                     %% "zio"          % zioVersion,
         "dev.zio"                     %% "zio-streams"  % zioVersion,
         "dev.zio"                     %% "zio-query"    % zqueryVersion,
-        "dev.zio"                     %% "zio-test"     % zioVersion   % Test,
-        "dev.zio"                     %% "zio-test-sbt" % zioVersion   % Test,
-        "com.softwaremill.sttp.tapir" %% "tapir-core"   % tapirVersion % Optional,
-        "io.circe"                    %% "circe-core"   % circeVersion % Optional,
-        "io.circe"                    %% "circe-parser" % circeVersion % Test
+        "dev.zio"                     %% "zio-test"     % zioVersion     % Test,
+        "dev.zio"                     %% "zio-test-sbt" % zioVersion     % Test,
+        "dev.zio"                     %% "zio-json"     % zioJsonVersion % Optional,
+        "com.softwaremill.sttp.tapir" %% "tapir-core"   % tapirVersion   % Optional,
+        "io.circe"                    %% "circe-core"   % circeVersion   % Optional,
+        "io.circe"                    %% "circe-parser" % circeVersion   % Test
       )
   )
   .dependsOn(macros)
@@ -151,6 +150,7 @@ lazy val tools = project
     libraryDependencies ++= Seq(
       "org.scalameta"                 %% "scalafmt-dynamic"              % "3.1.2",
       "org.scalameta"                 %% "scalafmt-core"                 % "3.1.2",
+      "com.softwaremill.sttp.client3" %% "zio"                           % sttpVersion,
       "com.softwaremill.sttp.client3" %% "async-http-client-backend-zio" % sttpVersion,
       "dev.zio"                       %% "zio-config"                    % zioConfigVersion,
       "dev.zio"                       %% "zio-config-magnolia"           % zioConfigVersion,
@@ -220,7 +220,7 @@ lazy val monixInterop = project
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= Seq(
-      "dev.zio"  %% "zio-interop-reactivestreams" % "1.3.12",
+      "dev.zio"  %% "zio-interop-reactivestreams" % zioInteropReactiveVersion,
       "dev.zio"  %% "zio-interop-cats"            % zioInteropCats2Version,
       "io.monix" %% "monix"                       % "3.4.1"
     )
@@ -239,9 +239,8 @@ lazy val tapirInterop = project
     } ++
       Seq(
         "com.softwaremill.sttp.tapir"   %% "tapir-core"                    % tapirVersion,
-        "com.softwaremill.sttp.tapir"   %% "tapir-zio1"                    % tapirVersion,
+        "com.softwaremill.sttp.tapir"   %% "tapir-zio"                     % tapirVersion,
         "com.softwaremill.sttp.tapir"   %% "tapir-sttp-client"             % tapirVersion % Test,
-        "com.softwaremill.sttp.tapir"   %% "tapir-sttp-client-ws-zio1"     % tapirVersion % Test,
         "com.softwaremill.sttp.tapir"   %% "tapir-json-circe"              % tapirVersion % Test,
         "com.softwaremill.sttp.client3" %% "async-http-client-backend-zio" % sttpVersion  % Test,
         "dev.zio"                       %% "zio-test"                      % zioVersion   % Test,
@@ -263,7 +262,7 @@ lazy val http4s = project
       Seq(
         "dev.zio"                       %% "zio-interop-cats"              % zioInteropCats3Version,
         "org.typelevel"                 %% "cats-effect"                   % catsEffect3Version,
-        "com.softwaremill.sttp.tapir"   %% "tapir-http4s-server-zio1"      % tapirVersion,
+        "com.softwaremill.sttp.tapir"   %% "tapir-http4s-server-zio"       % tapirVersion,
         "com.softwaremill.sttp.tapir"   %% "tapir-json-circe"              % tapirVersion,
         "org.http4s"                    %% "http4s-blaze-server"           % http4sVersion % Test,
         "dev.zio"                       %% "zio-test"                      % zioVersion    % Test,
@@ -280,14 +279,11 @@ lazy val zioHttp = project
   .settings(name := "caliban-zio-http")
   .settings(commonSettings)
   .settings(
-    resolvers ++= Seq(
-      "Sonatype OSS Snapshots" at "https://s01.oss.sonatype.org/content/repositories/snapshots"
-    ),
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
     libraryDependencies ++= Seq(
-      "io.d11"                      %% "zhttp"                  % zioHttpVersion,
-      "com.softwaremill.sttp.tapir" %% "tapir-zio1-http-server" % tapirVersion,
-      "com.softwaremill.sttp.tapir" %% "tapir-json-circe"       % tapirVersion
+      "io.d11"                      %% "zhttp"                 % zioHttpVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-zio-http-server" % tapirVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-json-circe"      % tapirVersion
     )
   )
   .dependsOn(core, tapirInterop % "compile->compile;test->test")
@@ -428,10 +424,10 @@ lazy val reporting = project
   .settings(
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
     libraryDependencies ++= Seq(
-      "dev.zio"                       %% "zio"                           % zioVersion,
-      "com.softwaremill.sttp.client3" %% "async-http-client-backend-zio" % sttpVersion,
-      "dev.zio"                       %% "zio-test"                      % zioVersion % Test,
-      "dev.zio"                       %% "zio-test-sbt"                  % zioVersion % Test
+      "dev.zio"                       %% "zio"          % zioVersion,
+      "com.softwaremill.sttp.client3" %% "zio"          % sttpVersion,
+      "dev.zio"                       %% "zio-test"     % zioVersion % Test,
+      "dev.zio"                       %% "zio-test-sbt" % zioVersion % Test
     )
   )
 

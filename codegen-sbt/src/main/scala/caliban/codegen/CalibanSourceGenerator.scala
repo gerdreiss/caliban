@@ -3,7 +3,6 @@ package caliban.codegen
 import _root_.caliban.tools._
 import sbt._
 import sjsonnew.IsoLList
-import zio.blocking.Blocking
 
 import java.io.File
 import java.net.URL
@@ -11,7 +10,7 @@ import java.net.URL
 object CalibanSourceGenerator {
   import sjsonnew.{ :*:, LList, LNil }
   import zio._
-  import zio.console._
+  import zio.Console.printLine
 
   final case class TrackedSettings(arguments: Seq[String])
   object TrackedSettings {
@@ -74,10 +73,10 @@ object CalibanSourceGenerator {
       def generateFileSource(
         graphql: File,
         settings: CalibanCommonSettings
-      ): ZIO[Blocking, Option[Throwable], List[File]] =
+      ): IO[Option[Throwable], List[File]] =
         for {
           generatedSource <- ZIO.succeed(transformFile(sourceRoot, sourceManaged, settings)(graphql))
-          _               <- Task(sbt.IO.createDirectory(generatedSource.toPath.getParent.toFile)).asSomeError
+          _               <- ZIO.attemptBlockingIO(sbt.IO.createDirectory(generatedSource.toPath.getParent.toFile)).asSomeError
           opts            <- ZIO.fromOption(Some(settings.toOptions(graphql.toString, generatedSource.toString)))
           files           <- Codegen.generate(opts, settings.genType).asSomeError
         } yield files
@@ -85,13 +84,13 @@ object CalibanSourceGenerator {
       def generateUrlSource(
         graphql: URL,
         settings: CalibanCommonSettings
-      ): ZIO[Blocking, Option[Throwable], List[File]] =
+      ): IO[Option[Throwable], List[File]] =
         for {
           generatedSource <-
             ZIO.succeed(
               transformFile(sourceRoot, sourceManaged, settings)(new java.io.File(graphql.getPath.stripPrefix("/")))
             )
-          _               <- Task(sbt.IO.createDirectory(generatedSource.toPath.getParent.toFile)).asSomeError
+          _               <- ZIO.attemptBlockingIO(sbt.IO.createDirectory(generatedSource.toPath.getParent.toFile)).asSomeError
           opts            <- ZIO.fromOption(Some(settings.toOptions(graphql.toString, generatedSource.toString)))
           files           <- Codegen.generate(opts, settings.genType).asSomeError
         } yield files
@@ -99,12 +98,10 @@ object CalibanSourceGenerator {
       val generateFromFiles = ZIO
         .foreach(sources.toList) { source =>
           ZIO
-            .collectAll(
-              collectSettingsFor(fileSettings, source).map(s => generateFileSource(source, s.settings))
-            )
+            .foreach(collectSettingsFor(fileSettings, source))(s => generateFileSource(source, s.settings))
             .catchAll {
               case Some(reason) =>
-                putStrLn(reason.toString) *> putStrLn(reason.getStackTrace.mkString("\n")).as(List.empty)
+                printLine(reason.toString) *> printLine(reason.getStackTrace.mkString("\n")).as(List.empty)
               case None         => ZIO.succeed(List.empty)
             }
             .map(_.flatten)
@@ -113,13 +110,15 @@ object CalibanSourceGenerator {
       val generateFromURLs = ZIO.foreach(urlSettings)(setting =>
         generateUrlSource(setting.url, setting.settings).catchAll {
           case Some(reason) =>
-            putStrLn(reason.toString) *> putStrLn(reason.getStackTrace.mkString("\n")).as(List.empty)
+            printLine(reason.toString) *> printLine(reason.getStackTrace.mkString("\n")).as(List.empty)
           case None         => ZIO.succeed(List.empty)
         }
       )
 
-      Runtime.default.unsafeRun {
-        ZIO.mapN(generateFromFiles, generateFromURLs)((_ ++ _)).map(_.flatten)
+      Unsafe.unsafe { implicit u =>
+        Runtime.default.unsafe.run {
+          generateFromFiles.zipWith(generateFromURLs)(_ ++ _).map(_.flatten)
+        }.getOrThrowFiberFailure()
       }
     }
 

@@ -19,14 +19,12 @@ object TriState {
 
       override def toType(isInput: Boolean, isSubscription: Boolean) = ev.toType_(isInput, isSubscription)
 
-      override def resolve(value: TriState[A]) = {
-        println(("resolve", value))
+      override def resolve(value: TriState[A]) =
         value match {
           case Undefined => undefined
           case Null      => Step.NullStep
           case Value(v)  => ev.resolve(v)
         }
-      }
     }
 
   implicit def schema[R, A](implicit ev: Schema[R, A]): Schema[R, TriState[A]] = schemaCustom(Step.NullStep)

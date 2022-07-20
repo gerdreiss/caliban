@@ -13,13 +13,13 @@ import org.http4s.server.middleware.CORS
 import zio._
 import zio.interop.catz._
 
-object ExampleApp extends App {
+object ExampleApp extends ZIOAppDefault {
 
-  type ExampleTask[A] = RIO[ZEnv with ExampleService, A]
+  type ExampleTask[A] = RIO[ExampleService, A]
 
-  override def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
+  override def run =
     ZIO
-      .runtime[ZEnv with ExampleService]
+      .runtime[ExampleService]
       .flatMap(implicit runtime =>
         for {
           interpreter <- ExampleApi.api.interpreter
@@ -33,10 +33,10 @@ object ExampleApp extends App {
                              ).orNotFound
                            )
                            .resource
-                           .toManagedZIO
-                           .useForever
+                           .toScopedZIO
+                           .forever
         } yield ()
       )
-      .provideCustomLayer(ExampleService.make(sampleCharacters))
+      .provideSomeLayer[Scope](ExampleService.make(sampleCharacters))
       .exitCode
 }

@@ -8,30 +8,29 @@ import caliban.{ CalibanError, RootResolver }
 import zio.ZIO
 import zio.test.Assertion._
 import zio.test._
-import zio.test.environment.TestEnvironment
 
-object SchemaComparisonSpec extends DefaultRunnableSpec {
+object SchemaComparisonSpec extends ZIOSpecDefault {
 
   def compare(
     schema1: String,
     schema2: String,
     expected: List[String]
   ): ZIO[Any, CalibanError.ParsingError, TestResult] =
-    assertM(for {
+    for {
       s1  <- Parser.parseQuery(schema1)
       s2  <- Parser.parseQuery(schema2)
       diff = compareDocuments(s1, s2)
-    } yield diff.map(_.toString))(equalTo(expected))
+    } yield assertTrue(diff.map(_.toString) == expected)
 
-  override def spec: ZSpec[TestEnvironment, Any] =
+  override def spec =
     suite("SchemaComparisonSpec")(
-      testM("field changed") {
+      test("field changed") {
         val schema1: String =
           """
           input HeroInput {
             test: String!
           }
-          
+
           type Hero {
             name(pad: Int!): String!
             nick: String!
@@ -44,7 +43,7 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
           input HeroInput {
             test: String
           }
-          
+
           type Hero {
             name(pad: Int!): String!
             nick: String!
@@ -59,7 +58,7 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
 
         compare(schema1, schema2, expected)
       },
-      testM("type added") {
+      test("type added") {
         val schema1: String =
           """
           type Hero {
@@ -72,7 +71,7 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
           input HeroInput {
             test: String
           }
-          
+
           type Hero {
             name(pad: Int!): String!
           }
@@ -80,7 +79,7 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
 
         compare(schema1, schema2, List("Type 'HeroInput' was added."))
       },
-      testM("description changes") {
+      test("description changes") {
         val schema1: String =
           """
           type DescTest {
@@ -110,13 +109,13 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
         )
         compare(schema1, schema2, expected)
       },
-      testM("various changes") {
+      test("various changes") {
         val schema1: String =
           """
           input HeroInput {
             test: String
           }
-          
+
           type Hero {
             name(pad: Int!): String!
           }
@@ -127,7 +126,7 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
           input HeroInput {
             test2: String
           }
-          
+
           type Hero {
             name(pad: Int!, a: String): String
           }
@@ -142,7 +141,7 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
 
         compare(schema1, schema2, expected)
       },
-      testM("optional argument added") {
+      test("optional argument added") {
         val schema1: String =
           """
           input HeroInput {
@@ -158,13 +157,13 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
           }
             |""".stripMargin
 
-        assertM(for {
+        for {
           s1  <- Parser.parseQuery(schema1)
           s2  <- Parser.parseQuery(schema2)
           diff = compareDocuments(s1, s2)
-        } yield diff)(hasFirst(hasField("breaking", _.breaking, equalTo(false))))
+        } yield assert(diff)(hasFirst(hasField("breaking", _.breaking, equalTo(false))))
       },
-      testM("non-optional argument added") {
+      test("non-optional argument added") {
         val schema1: String =
           """
           input HeroInput {
@@ -180,19 +179,19 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
           }
             |""".stripMargin
 
-        assertM(for {
+        for {
           s1  <- Parser.parseQuery(schema1)
           s2  <- Parser.parseQuery(schema2)
           diff = compareDocuments(s1, s2)
-        } yield diff)(hasFirst(hasField("breaking", _.breaking, equalTo(true))))
+        } yield assert(diff)(hasFirst(hasField("breaking", _.breaking, equalTo(true))))
       },
-      testM("deprecated") {
+      test("deprecated") {
         val schema1: String =
           """
           input HeroInput {
             test: String @deprecated
           }
-          
+
           type Hero {
             name(pad: Int!): String!
           }
@@ -203,7 +202,7 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
           input HeroInput {
             test: String
           }
-          
+
           type Hero {
             name(pad: Int!): String!
           }
@@ -211,7 +210,7 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
 
         compare(schema1, schema2, List("Directive 'deprecated' was deleted from field 'test' of type 'HeroInput'."))
       },
-      testM("compare Caliban schema with string schema") {
+      test("compare Caliban schema with string schema") {
         val schema: String =
           """
           type Hero {
@@ -219,7 +218,7 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
             nick: String! @deprecated(reason: "some reason")
             bday: Int
           }
-          
+
           type Query {
             hero: Hero!
           }
@@ -231,9 +230,9 @@ object SchemaComparisonSpec extends DefaultRunnableSpec {
 
         val api = graphQL(RootResolver(Query(Hero(_ => "name", "nick", None))))
 
-        assertM(for {
+        for {
           diff <- SchemaComparison.compare(SchemaLoader.fromString(schema), SchemaLoader.fromCaliban(api))
-        } yield diff)(equalTo(Nil))
+        } yield assertTrue(diff == Nil)
       }
     )
 }

@@ -1,19 +1,16 @@
 package caliban.tools
 
 import caliban.tools.Options.Header
-import zio.test.Assertion._
 import zio.test._
-import zio.test.environment.TestEnvironment
 
-object OptionsSpec extends DefaultRunnableSpec {
-  override def spec: ZSpec[TestEnvironment, Any] =
+object OptionsSpec extends ZIOSpecDefault {
+  override def spec =
     suite("OptionsSpec")(
-      testM("full arguments") {
-        val input  = List("schema", "output", "--scalafmtPath", "fmtPath", "--headers", "header1:value1,header2:value2")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
+      test("full arguments") {
+        val input = List("schema", "output", "--scalafmtPath", "fmtPath", "--headers", "header1:value1,header2:value2")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result == Some(
               Options(
                 "schema",
                 "output",
@@ -33,15 +30,13 @@ object OptionsSpec extends DefaultRunnableSpec {
               )
             )
           )
-        )
-
+        }
       },
-      testM("full arguments (--headers option first)") {
-        val input  = List("schema", "output", "--headers", "header1:value1,header2:value2", "--scalafmtPath", "fmtPath")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
+      test("full arguments (--headers option first)") {
+        val input = List("schema", "output", "--headers", "header1:value1,header2:value2", "--scalafmtPath", "fmtPath")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result == Some(
               Options(
                 "schema",
                 "output",
@@ -61,302 +56,322 @@ object OptionsSpec extends DefaultRunnableSpec {
               )
             )
           )
-        )
+        }
       },
-      testM("minimum arguments") {
-        val input  = List("schema", "output")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
-              Options("schema", "output", None, None, None, None, None, None, None, None, None, None, None, None, None)
-            )
-          )
-        )
-      },
-      testM("not enough arguments") {
-        val input  = List("schema")
-        val result = Options.fromArgs(input)
-        assertM(result)(equalTo(None))
-      },
-      testM("--scalafmtPath value missing") {
-        val input  = List("schema", "output", "--scalafmtPath", "--headers", "header1:value1,header2:value2")
-        val result = Options.fromArgs(input)
-        assertM(result)(equalTo(None))
-      },
-      testM("empty list") {
-        val result = Options.fromArgs(Nil)
-        assertM(result)(equalTo(None))
-      },
-      testM("provide package name") {
-        val input  = List("schema", "output", "--packageName", "com.github.ghostdogpr")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
-              Options(
-                "schema",
-                "output",
-                None,
-                None,
-                Some("com.github.ghostdogpr"),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None
+      test("minimum arguments") {
+        val input = List("schema", "output")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result ==
+              Some(
+                Options(
+                  "schema",
+                  "output",
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None
+                )
               )
-            )
           )
-        )
+        }
       },
-      testM("provide client name") {
-        val input  = List("schema", "output", "--clientName", "GraphqlClient.scala")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
-              Options(
-                "schema",
-                "output",
-                None,
-                None,
-                None,
-                Some("GraphqlClient.scala"),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None
-              )
-            )
-          )
-        )
+      test("not enough arguments") {
+        val input = List("schema")
+        Options.fromArgs(input).map { result =>
+          assertTrue(result == None)
+        }
       },
-      testM("provide effect") {
-        val input  = List("schema", "output", "--effect", "cats.effect.IO")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
-              Options(
-                "schema",
-                "output",
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some("cats.effect.IO"),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None
-              )
-            )
-          )
-        )
+      test("--scalafmtPath value missing") {
+        val input = List("schema", "output", "--scalafmtPath", "--headers", "header1:value1,header2:value2")
+        Options.fromArgs(input).map { result =>
+          assertTrue(result == None)
+        }
       },
-      testM("provide genView") {
-        val input  = List("schema", "output", "--genView", "true")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
-              Options(
-                "schema",
-                "output",
-                None,
-                None,
-                None,
-                None,
-                Some(true),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None
-              )
-            )
-          )
-        )
+      test("empty list") {
+        val input = Nil
+        Options.fromArgs(input).map { result =>
+          assertTrue(result == None)
+        }
       },
-      testM("provide extensibleEnums") {
-        val input  = List("schema", "output", "--extensibleEnums", "true")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
-              Options(
-                "schema",
-                "output",
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some(true),
-                None
+      test("provide package name") {
+        val input = List("schema", "output", "--packageName", "com.github.ghostdogpr")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result ==
+              Some(
+                Options(
+                  "schema",
+                  "output",
+                  None,
+                  None,
+                  Some("com.github.ghostdogpr"),
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None
+                )
               )
-            )
           )
-        )
+        }
       },
-      testM("provide scalarMappings") {
-        val input  = List("schema", "output", "--scalarMappings", "Long:scala.Long")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
-              Options(
-                "schema",
-                "output",
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some(Map("Long" -> "scala.Long")),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None
+      test("provide client name") {
+        val input = List("schema", "output", "--clientName", "GraphqlClient.scala")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result ==
+              Some(
+                Options(
+                  "schema",
+                  "output",
+                  None,
+                  None,
+                  None,
+                  Some("GraphqlClient.scala"),
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None
+                )
               )
-            )
           )
-        )
+        }
       },
-      testM("provide imports") {
-        val input  = List("schema", "output", "--imports", "a.b.Clazz,b.c._")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
-              Options(
-                "schema",
-                "output",
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some(List("a.b.Clazz", "b.c._")),
-                None,
-                None,
-                None,
-                None,
-                None
+      test("provide effect") {
+        val input = List("schema", "output", "--effect", "cats.effect.IO")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result ==
+              Some(
+                Options(
+                  "schema",
+                  "output",
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  Some("cats.effect.IO"),
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None
+                )
               )
-            )
           )
-        )
+        }
       },
-      testM("provide abstractEffectType") {
-        val input  = List("schema", "output", "--effect", "F", "--abstractEffectType", "true")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
-              Options(
-                "schema",
-                "output",
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some("F"),
-                None,
-                None,
-                Some(true),
-                None,
-                None,
-                None,
-                None
+      test("provide genView") {
+        val input = List("schema", "output", "--genView", "true")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result ==
+              Some(
+                Options(
+                  "schema",
+                  "output",
+                  None,
+                  None,
+                  None,
+                  None,
+                  Some(true),
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None
+                )
               )
-            )
           )
-        )
+        }
       },
-      testM("provide preserveInputNames") {
-        val input  = List("schema", "output", "--preserveInputNames", "true")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
-              Options(
-                "schema",
-                "output",
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some(true)
+      test("provide extensibleEnums") {
+        val input = List("schema", "output", "--extensibleEnums", "true")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result ==
+              Some(
+                Options(
+                  "schema",
+                  "output",
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  Some(true),
+                  None
+                )
               )
-            )
           )
-        )
+        }
       },
-      testM("header with a colon in the value") {
-        val input  = List("schema", "output", "--scalafmtPath", "fmtPath", "--headers", "aaa:bbb:ccc")
-        val result = Options.fromArgs(input)
-        assertM(result)(
-          equalTo(
-            Some(
-              Options(
-                "schema",
-                "output",
-                Some("fmtPath"),
-                Some(List(Header("aaa", "bbb:ccc"))),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None
+      test("provide scalarMappings") {
+        val input = List("schema", "output", "--scalarMappings", "Long:scala.Long")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result ==
+              Some(
+                Options(
+                  "schema",
+                  "output",
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  Some(Map("Long" -> "scala.Long")),
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None
+                )
               )
-            )
           )
-        )
+        }
+      },
+      test("provide imports") {
+        val input = List("schema", "output", "--imports", "a.b.Clazz,b.c._")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result ==
+              Some(
+                Options(
+                  "schema",
+                  "output",
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  Some(List("a.b.Clazz", "b.c._")),
+                  None,
+                  None,
+                  None,
+                  None,
+                  None
+                )
+              )
+          )
+        }
+      },
+      test("provide abstractEffectType") {
+        val input = List("schema", "output", "--effect", "F", "--abstractEffectType", "true")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result ==
+              Some(
+                Options(
+                  "schema",
+                  "output",
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  Some("F"),
+                  None,
+                  None,
+                  Some(true),
+                  None,
+                  None,
+                  None,
+                  None
+                )
+              )
+          )
+        }
+      },
+      test("provide preserveInputNames") {
+        val input = List("schema", "output", "--preserveInputNames", "true")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result ==
+              Some(
+                Options(
+                  "schema",
+                  "output",
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  Some(true)
+                )
+              )
+          )
+        }
+      },
+      test("header with a colon in the value") {
+        val input = List("schema", "output", "--scalafmtPath", "fmtPath", "--headers", "aaa:bbb:ccc")
+        Options.fromArgs(input).map { result =>
+          assertTrue(
+            result ==
+              Some(
+                Options(
+                  "schema",
+                  "output",
+                  Some("fmtPath"),
+                  Some(List(Header("aaa", "bbb:ccc"))),
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None,
+                  None
+                )
+              )
+          )
+        }
       }
     )
 }

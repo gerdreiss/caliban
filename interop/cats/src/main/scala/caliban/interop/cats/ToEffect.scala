@@ -1,10 +1,12 @@
 package caliban.interop.cats
 
 import cats.effect.Async
-import cats.{ ~>, Monad }
 import cats.syntax.flatMap._
 import cats.syntax.functor._
-import zio.{ RIO, Runtime }
+import cats.{ ~>, Monad }
+import zio.{ RIO, Runtime, Tag, Unsafe, ZEnvironment, ZIO }
+
+import scala.concurrent.Future
 
 /**
  * Describes how a polymorphic effect `F` can be created from [[zio.RIO]].
@@ -78,7 +80,10 @@ object ToEffect {
    * @tparam F $fParam
    * @tparam R $rParam
    */
-  def contextual[F[_]: Async, R](implicit injector: InjectEnv[F, R], runtime: Runtime[R]): ToEffect.Contextual[F, R] =
+  def contextual[F[_]: Async, R: Tag](implicit
+    injector: InjectEnv[F, R],
+    runtime: Runtime[R]
+  ): ToEffect.Contextual[F, R] =
     contextual(forAsync[F, R])
 
   /**
@@ -89,17 +94,19 @@ object ToEffect {
    * @tparam F $fParam
    * @tparam R $rParam
    */
-  def contextual[F[_]: Monad, R](to: ToEffect[F, R])(implicit injector: InjectEnv[F, R]): ToEffect.Contextual[F, R] =
+  def contextual[F[_]: Monad, R: Tag](
+    to: ToEffect[F, R]
+  )(implicit injector: InjectEnv[F, R]): ToEffect.Contextual[F, R] =
     new ToEffect.Contextual[F, R] {
       def toEffect[A](rio: RIO[R, A]): F[A] =
         for {
-          rEnv   <- to.toEffect(RIO.environment[R])
-          env    <- injector.modify(rEnv)
+          rEnv   <- to.toEffect(ZIO.environment[R])
+          env    <- injector.modify(rEnv.get)
           result <- toEffect(rio, env)
         } yield result
 
       def toEffect[A](rio: RIO[R, A], env: R): F[A] =
-        injector.inject(to.toEffect(rio.provideSome(_ => env)), env)
+        injector.inject(to.toEffect(rio.provideSomeEnvironment(_ => ZEnvironment(env))), env)
     }
 
   /**
@@ -115,7 +122,11 @@ object ToEffect {
   implicit def forAsync[F[_], R](implicit F: Async[F], runtime: Runtime[R]): ToEffect[F, R] =
     new ToEffect[F, R] {
       def toEffect[A](rio: RIO[R, A]): F[A] =
-        zio.interop.toEffect(rio)
+        F.uncancelable { poll =>
+          F.delay(Unsafe.unsafeCompat(implicit u => runtime.unsafe.runToFuture(rio))).flatMap { future =>
+            poll(F.onCancel(F.fromFuture(F.pure[Future[A]](future)), F.fromFuture(F.delay(future.cancel())).void))
+          }
+        }
     }
 
 }

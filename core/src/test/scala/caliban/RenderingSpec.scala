@@ -6,11 +6,10 @@ import caliban.introspection.adt.{ __Type, __TypeKind }
 import caliban.parsing.adt.Directive
 import zio.test.Assertion._
 import zio.test._
-import zio.test.environment.TestEnvironment
 
-object RenderingSpec extends DefaultRunnableSpec {
+object RenderingSpec extends ZIOSpecDefault {
 
-  override def spec: ZSpec[TestEnvironment, Any] =
+  override def spec =
     suite("rendering")(
       test("it should render directives") {
         assert(
@@ -92,44 +91,42 @@ object RenderingSpec extends DefaultRunnableSpec {
       test("it should render descriptions") {
         import RenderingSpecSchema._
         val generated = graphQL(resolverSchema).render.trim
-        assert(generated)(equalTo("""|schema {
-                                     |  query: QueryTest
-                                     |  mutation: MutationTest
-                                     |}
-                                     |
-                                     |input UserTestInput {
-                                     |  name: String!
-                                     |  "field-description"
-                                     |  age: Int!
-                                     |}
-                                     |
-                                     |type MutationTest {
-                                     |  id(id: Int!, user: UserTestInput!): Boolean!
-                                     |  fetch(nameLike: String!, "is user active currently" active: Boolean!): Boolean!
-                                     |}
-                                     |
-                                     |type QueryTest {
-                                     |  allUsers: [UserTest!]!
-                                     |}
-                                     |
-                                     |type UserTest {
-                                     |  name: String!
-                                     |  "field-description"
-                                     |  age: Int!
-                                     |}""".stripMargin.trim))
+        assertTrue(generated == """|schema {
+                                   |  query: QueryTest
+                                   |  mutation: MutationTest
+                                   |}
+                                   |
+                                   |input UserTestInput {
+                                   |  name: String!
+                                   |  "field-description"
+                                   |  age: Int!
+                                   |}
+                                   |
+                                   |type MutationTest {
+                                   |  id(id: Int!, user: UserTestInput!): Boolean!
+                                   |  fetch(nameLike: String!, "is user active currently" active: Boolean!): Boolean!
+                                   |}
+                                   |
+                                   |type QueryTest {
+                                   |  allUsers: [UserTest!]!
+                                   |}
+                                   |
+                                   |type UserTest {
+                                   |  name: String!
+                                   |  "field-description"
+                                   |  age: Int!
+                                   |}""".stripMargin.trim)
       },
       test("it should render empty objects without field list") {
-        assert(graphQL(InvalidSchemas.Object.resolverEmpty).render.trim)(
-          equalTo("""schema {
-                    |  query: TestEmptyObject
-                    |}
-                    |
-                    |type EmptyObject
-                    |
-                    |type TestEmptyObject {
-                    |  o: EmptyObject!
-                    |}""".stripMargin.trim)
-        )
+        assertTrue(graphQL(InvalidSchemas.Object.resolverEmpty).render.trim == """schema {
+                                                                                 |  query: TestEmptyObject
+                                                                                 |}
+                                                                                 |
+                                                                                 |type EmptyObject
+                                                                                 |
+                                                                                 |type TestEmptyObject {
+                                                                                 |  o: EmptyObject!
+                                                                                 |}""".stripMargin.trim)
       },
       test("it should not render a schema in no queries, mutations, or subscription") {
         assert(graphQL(InvalidSchemas.resolverEmpty).render.trim)(

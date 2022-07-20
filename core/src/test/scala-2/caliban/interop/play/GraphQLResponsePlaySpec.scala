@@ -8,19 +8,16 @@ import caliban.parsing.adt.LocationInfo
 import play.api.libs.json._
 import zio.test.Assertion._
 import zio.test._
-import zio.test.environment.TestEnvironment
 
-object GraphQLResponsePlaySpec extends DefaultRunnableSpec {
+object GraphQLResponsePlaySpec extends ZIOSpecDefault {
 
   val writer = implicitly[Writes[GraphQLResponse[Any]]]
 
-  override def spec: ZSpec[TestEnvironment, Any] =
+  override def spec =
     suite("GraphQLResponsePlaySpec")(
       test("can be converted to JSON [play]") {
         val response = GraphQLResponse(StringValue("data"), Nil)
-        assert(writer.writes(response))(
-          equalTo(Json.obj("data" -> JsString("data")))
-        )
+        assertTrue(writer.writes(response) == Json.obj("data" -> JsString("data")))
       },
       test("should include error objects for every error, including extensions [play]") {
         val errorExtensions = List(
@@ -39,16 +36,14 @@ object GraphQLResponsePlaySpec extends DefaultRunnableSpec {
           )
         )
 
-        assert(writer.writes(response))(
-          equalTo(
-            Json.obj(
-              "data"   -> JsString("data"),
-              "errors" -> Json.arr(
-                Json.obj(
-                  "message"    -> JsString("Resolution failed"),
-                  "locations"  -> Json.arr(Json.obj("column" -> JsNumber(1), "line" -> JsNumber(2))),
-                  "extensions" -> Json.obj("errorCode" -> JsString("TEST_ERROR"), "myCustomKey" -> JsString("my-value"))
-                )
+        assertTrue(
+          writer.writes(response) == Json.obj(
+            "data"   -> JsString("data"),
+            "errors" -> Json.arr(
+              Json.obj(
+                "message"    -> JsString("Resolution failed"),
+                "locations"  -> Json.arr(Json.obj("column" -> JsNumber(1), "line" -> JsNumber(2))),
+                "extensions" -> Json.obj("errorCode" -> JsString("TEST_ERROR"), "myCustomKey" -> JsString("my-value"))
               )
             )
           )
@@ -60,11 +55,9 @@ object GraphQLResponsePlaySpec extends DefaultRunnableSpec {
           List.empty
         )
 
-        assert(writer.writes(response))(
-          equalTo(
-            Json.obj(
-              "data" -> JsString("data")
-            )
+        assertTrue(
+          writer.writes(response) == Json.obj(
+            "data" -> JsString("data")
           )
         )
       },

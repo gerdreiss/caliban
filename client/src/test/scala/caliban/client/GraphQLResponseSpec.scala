@@ -2,7 +2,6 @@ package caliban.client
 
 import caliban.client.GraphQLResponseError.Location
 import zio.test.Assertion._
-import zio.test.environment.TestEnvironment
 import zio.test._
 
 import zio.ZIO
@@ -10,9 +9,9 @@ import zio.ZIO
 import io.circe.parser.decode
 import io.circe.Json
 
-object GraphQLResponseSpec extends DefaultRunnableSpec {
+object GraphQLResponseSpec extends ZIOSpecDefault {
 
-  override def spec: ZSpec[TestEnvironment, Any] =
+  override def spec =
     suite("GraphQLResponseSpec")(
       test("can be parsed from JSON") {
         val response =
@@ -35,7 +34,7 @@ object GraphQLResponseSpec extends DefaultRunnableSpec {
           )
         )
       },
-      testM("can parse extensions from JSON") {
+      test("can parse extensions from JSON") {
         val dataRawJson =
           """|{
              |  "shop": {
@@ -75,13 +74,11 @@ object GraphQLResponseSpec extends DefaultRunnableSpec {
           response   <- ZIO.fromEither(decode[GraphQLResponse](responseRawJson))
           data       <- ZIO.fromEither(decode[__Value](dataRawJson))
           extensions <- ZIO.fromEither(decode[Json](extensionsRawJson))
-        } yield assert(response)(
-          equalTo(
-            GraphQLResponse(
-              Some(data),
-              Nil,
-              Some(extensions)
-            )
+        } yield assertTrue(
+          response == GraphQLResponse(
+            Some(data),
+            Nil,
+            Some(extensions)
           )
         )
       }

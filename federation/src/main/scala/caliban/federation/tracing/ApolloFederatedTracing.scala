@@ -10,9 +10,8 @@ import caliban.{ GraphQLRequest, GraphQLResponse, ResponseValue }
 import com.google.protobuf.timestamp.Timestamp
 import mdg.engine.proto.reports.Trace
 import mdg.engine.proto.reports.Trace.{ Error, Location, Node }
-import zio.clock.Clock
 import zio.query.ZQuery
-import zio.{ clock, Ref, ZIO }
+import zio._
 
 import java.util.Base64
 import java.util.concurrent.TimeUnit
@@ -23,7 +22,7 @@ import java.util.concurrent.TimeUnit
  */
 object ApolloFederatedTracing {
 
-  val wrapper: EffectfulWrapper[Clock] =
+  val wrapper: EffectfulWrapper[Any] =
     EffectfulWrapper(
       for {
         tracing <- Ref.make(Tracing(NodeTrie.empty))
@@ -37,13 +36,13 @@ object ApolloFederatedTracing {
       (epochMilli % 1000).toInt * 1000000
     )
 
-  private def apolloTracingOverall(ref: Ref[Tracing], enabled: Ref[Boolean]): OverallWrapper[Clock] =
-    new OverallWrapper[Clock] {
-      def wrap[R1 <: Clock](
+  private def apolloTracingOverall(ref: Ref[Tracing], enabled: Ref[Boolean]): OverallWrapper[Any] =
+    new OverallWrapper[Any] {
+      def wrap[R1](
         process: GraphQLRequest => ZIO[R1, Nothing, GraphQLResponse[CalibanError]]
       ): GraphQLRequest => ZIO[R1, Nothing, GraphQLResponse[CalibanError]] =
         (request: GraphQLRequest) =>
-          ZIO.ifM(
+          ZIO.ifZIO(
             enabled.updateAndGet(_ =>
               request.extensions.exists(
                 _.get(GraphQLRequest.`apollo-federation-include-trace`).contains(StringValue(GraphQLRequest.ftv1))
@@ -51,11 +50,11 @@ object ApolloFederatedTracing {
             )
           )(
             for {
-              startNano             <- clock.nanoTime
+              startNano             <- Clock.nanoTime
               _                     <- ref.update(_.copy(startTime = startNano))
-              response              <- process(request).summarized(clock.currentTime(TimeUnit.MILLISECONDS))((_, _))
+              response              <- process(request).summarized(Clock.currentTime(TimeUnit.MILLISECONDS))((_, _))
               ((start, end), result) = response
-              endNano               <- clock.nanoTime
+              endNano               <- Clock.nanoTime
               tracing               <- ref.get
             } yield {
               val root = Trace(
@@ -79,21 +78,21 @@ object ApolloFederatedTracing {
           )
     }
 
-  private def apolloTracingField(ref: Ref[Tracing], enabled: Ref[Boolean]): FieldWrapper[Clock] =
-    new FieldWrapper[Clock](true) {
-      def wrap[R1 <: Clock](
+  private def apolloTracingField(ref: Ref[Tracing], enabled: Ref[Boolean]): FieldWrapper[Any] =
+    new FieldWrapper[Any](true) {
+      def wrap[R1](
         query: ZQuery[R1, CalibanError.ExecutionError, ResponseValue],
         fieldInfo: FieldInfo
       ): ZQuery[R1, CalibanError.ExecutionError, ResponseValue] =
         ZQuery
-          .fromEffect(enabled.get)
+          .fromZIO(enabled.get)
           .flatMap(
             if (_)
               for {
-                response                          <- query.either.summarized(clock.nanoTime)((_, _))
+                response                          <- query.either.summarized(Clock.nanoTime)((_, _))
                 ((startTime, endTime), summarized) = response
                 id                                 = Node.Id.ResponseName(fieldInfo.name)
-                result                            <- ZQuery.fromEffect(
+                result                            <- ZQuery.fromZIO(
                                                        ref.update(state =>
                                                          state.copy(
                                                            root = state.root.insert(

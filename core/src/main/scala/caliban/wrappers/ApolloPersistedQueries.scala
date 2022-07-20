@@ -5,30 +5,34 @@ import caliban.Value.{ NullValue, StringValue }
 import caliban.parsing.adt.Document
 import caliban.wrappers.Wrapper.{ EffectfulWrapper, OverallWrapper, ParsingWrapper }
 import caliban.{ CalibanError, GraphQLRequest, GraphQLResponse, InputValue }
-import zio.{ Has, Layer, Ref, UIO, ZIO }
+import zio._
 
 import java.nio.charset.StandardCharsets
 import scala.collection.mutable
 
 object ApolloPersistedQueries {
 
-  type ApolloPersistence = Has[Service]
-
-  trait Service {
+  trait ApolloPersistence {
     def get(hash: String): UIO[Option[Document]]
     def add(hash: String, query: Document): UIO[Unit]
   }
 
-  object Service {
-    val live: UIO[Service] = Ref.make[Map[String, Document]](Map()).map { cache =>
-      new Service {
+  object ApolloPersistence {
+
+    def get(hash: String): ZIO[ApolloPersistence, Nothing, Option[Document]]      =
+      ZIO.serviceWithZIO[ApolloPersistence](_.get(hash))
+    def add(hash: String, query: Document): ZIO[ApolloPersistence, Nothing, Unit] =
+      ZIO.serviceWithZIO[ApolloPersistence](_.add(hash, query))
+
+    val live: UIO[ApolloPersistence] = Ref.make[Map[String, Document]](Map()).map { cache =>
+      new ApolloPersistence {
         override def get(hash: String): UIO[Option[Document]]      = cache.get.map(_.get(hash))
         override def add(hash: String, query: Document): UIO[Unit] = cache.update(_.updated(hash, query))
       }
     }
   }
 
-  val live: Layer[Nothing, ApolloPersistence] = Service.live.toLayer
+  val live: Layer[Nothing, ApolloPersistence] = ZLayer(ApolloPersistence.live)
 
   private def parsingWrapper(docVar: Ref[Option[Either[String, Document]]]): ParsingWrapper[ApolloPersistence] =
     new ParsingWrapper[ApolloPersistence] {
@@ -38,7 +42,7 @@ object ApolloPersistedQueries {
         (query: String) =>
           docVar.getAndSet(None).flatMap {
             case Some(Right(doc)) => ZIO.succeed(doc)
-            case Some(Left(hash)) => f(query).tap(doc => ZIO.serviceWith[Service](_.add(hash, doc)))
+            case Some(Left(hash)) => f(query).tap(doc => ApolloPersistence.add(hash, doc))
             case None             => f(query)
           }
     }
@@ -56,8 +60,8 @@ object ApolloPersistedQueries {
         (request: GraphQLRequest) =>
           readHash(request) match {
             case Some(hash) =>
-              ZIO
-                .serviceWith[Service](_.get(hash))
+              ApolloPersistence
+                .get(hash)
                 .flatMap {
                   case Some(doc) => docVar.set(Some(Right(doc))) as request
                   case None      =>
@@ -69,7 +73,7 @@ object ApolloPersistedQueries {
 
                 }
                 .flatMap(process)
-                .catchAll(ex => UIO(GraphQLResponse(NullValue, List(ex))))
+                .catchAll(ex => ZIO.succeed(GraphQLResponse(NullValue, List(ex))))
             case None       => process(request)
           }
     }

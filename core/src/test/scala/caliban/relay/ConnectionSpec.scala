@@ -5,7 +5,7 @@ import zio.test.Assertion._
 import zio.test._
 import zio.ZIO
 
-object ConnectionSpec extends DefaultRunnableSpec {
+object ConnectionSpec extends ZIOSpecDefault {
   case class ItemEdge(cursor: Base64Cursor, node: Item) extends Edge[Base64Cursor, Item]
 
   object ItemEdge {
@@ -142,37 +142,33 @@ object ConnectionSpec extends DefaultRunnableSpec {
       assert(calcHasPreviousPage(PaginationCursor.After(Base64Cursor(0)), PaginationCount.First(3)))(isFalse) &&
       assert(calcHasPreviousPage(PaginationCursor.Before(Base64Cursor(1)), PaginationCount.First(3)))(isFalse)
     },
-    testM("it paginates the response forwards") {
+    test("it paginates the response forwards") {
       for {
         int <- api.interpreter
         res <- int.execute("""{connection(first:2) { edges { node { name } } } }""")
-      } yield assert(res.data.toString)(
-        equalTo("""{"connection":{"edges":[{"node":{"name":"1"}},{"node":{"name":"2"}}]}}""")
+      } yield assertTrue(
+        res.data.toString == """{"connection":{"edges":[{"node":{"name":"1"}},{"node":{"name":"2"}}]}}"""
       )
     },
-    testM("it paginates the response forwards with a cursor") {
+    test("it paginates the response forwards with a cursor") {
       for {
         int <- api.interpreter
         res <- int.execute("""{connection(first:2, after:"Y3Vyc29yOjE=") { edges { node { name } } } }""")
-      } yield assert(res.data.toString)(
-        equalTo("""{"connection":{"edges":[{"node":{"name":"3"}}]}}""")
-      )
+      } yield assertTrue(res.data.toString == """{"connection":{"edges":[{"node":{"name":"3"}}]}}""")
     },
-    testM("it paginates the response backwards") {
+    test("it paginates the response backwards") {
       for {
         int <- api.interpreter
         res <- int.execute("""{connection(last:2) { edges { node { name } } } }""")
-      } yield assert(res.data.toString)(
-        equalTo("""{"connection":{"edges":[{"node":{"name":"2"}},{"node":{"name":"3"}}]}}""")
+      } yield assertTrue(
+        res.data.toString == """{"connection":{"edges":[{"node":{"name":"2"}},{"node":{"name":"3"}}]}}"""
       )
     },
-    testM("it paginates the response backwards with a cursor") {
+    test("it paginates the response backwards with a cursor") {
       for {
         int <- api.interpreter
         res <- int.execute("""{connection(last:2, before: "Y3Vyc29yOjE=") { edges { node { name } } } }""")
-      } yield assert(res.data.toString)(
-        equalTo("""{"connection":{"edges":[{"node":{"name":"1"}}]}}""")
-      )
+      } yield assertTrue(res.data.toString == """{"connection":{"edges":[{"node":{"name":"1"}}]}}""")
     },
     test("it correctly renders as GraphQL") {
       val expected = """schema {
@@ -207,7 +203,7 @@ object ConnectionSpec extends DefaultRunnableSpec {
       assertTrue(api.render == expected)
     },
     suite("Pagination")(
-      testM("successfully returns a Pagination case class") {
+      test("successfully returns a Pagination case class") {
         val res = Args(
           first = Some(1),
           last = None,
@@ -215,16 +211,16 @@ object ConnectionSpec extends DefaultRunnableSpec {
           before = None
         ).toPagination
 
-        assertM(res)(
-          equalTo(
-            Pagination(
+        res.map { pagination =>
+          assertTrue(
+            pagination == Pagination(
               count = PaginationCount.First(1),
               cursor = PaginationCursor.After(Base64Cursor(1))
             )
           )
-        )
+        }
       },
-      testM("cursor can be null") {
+      test("cursor can be null") {
         val res = Args(
           first = Some(1),
           last = None,
@@ -232,125 +228,137 @@ object ConnectionSpec extends DefaultRunnableSpec {
           before = None
         ).toPagination
 
-        assertM(res)(
-          equalTo(
-            Pagination(
+        res.map { pagination =>
+          assertTrue(
+            pagination == Pagination(
               count = PaginationCount.First(1),
               cursor = PaginationCursor.NoCursor
             )
           )
-        )
+        }
       },
-      testM("both cursors and counts can't be set") {
+      test("both cursors and counts can't be set") {
         val res = Args(
           first = Some(1),
           last = Some(1),
           after = Some("dummy"),
           before = Some("dummy")
-        ).toPagination.run
+        ).toPagination.exit
 
-        assertM(res)(
-          fails(
-            hasMessage(
-              containsString("first and last cannot both be set") &&
-                containsString("before and after cannot both be set")
+        res.map(
+          assert(_)(
+            fails(
+              hasMessage(
+                containsString("first and last cannot both be set") &&
+                  containsString("before and after cannot both be set")
+              )
             )
           )
         )
       },
-      testM("must set first or last") {
+      test("must set first or last") {
         val res = Pagination[Base64Cursor](
           first = None,
           last = None,
           after = None,
           before = None
-        ).run
+        ).exit
 
-        assertM(res)(
-          fails(
-            hasMessage(equalTo("first and last cannot both be empty"))
+        res.map(
+          assert(_)(
+            fails(
+              hasMessage(equalTo("first and last cannot both be empty"))
+            )
           )
         )
       }
     ),
     suite("ForwardPagination")(
-      testM("successfully returns a Pagination case class") {
+      test("successfully returns a Pagination case class") {
         val res = ForwardArgs(
           first = Some(1),
           after = Some(Cursor[Base64Cursor].encode(Base64Cursor(1)))
         ).toPagination
 
-        assertM(res)(
-          equalTo(
-            Pagination(
+        res.map { pagination =>
+          assertTrue(
+            pagination == Pagination(
               count = PaginationCount.First(1),
               cursor = PaginationCursor.After(Base64Cursor(1))
             )
           )
-        )
+        }
       },
-      testM("must set first") {
+      test("must set first") {
         val res = ForwardArgs(
           first = None,
           after = None
-        ).toPagination.run
+        ).toPagination.exit
 
-        assertM(res)(
-          fails(
-            hasMessage(equalTo("first cannot be empty"))
+        res.map(
+          assert(_)(
+            fails(
+              hasMessage(equalTo("first cannot be empty"))
+            )
           )
         )
       },
-      testM("first cannot be negative") {
+      test("first cannot be negative") {
         val res = ForwardArgs(
           first = Some(-1),
           after = None
-        ).toPagination.run
+        ).toPagination.exit
 
-        assertM(res)(
-          fails(
-            hasMessage(equalTo("first cannot be negative"))
+        res.map(
+          assert(_)(
+            fails(
+              hasMessage(equalTo("first cannot be negative"))
+            )
           )
         )
       }
     ),
     suite("BackwardPagination")(
-      testM("successfully returns a Pagination case class") {
+      test("successfully returns a Pagination case class") {
         val res = BackwardArgs(
           last = Some(1),
           before = Some(Cursor[Base64Cursor].encode(Base64Cursor(1)))
         ).toPagination
 
-        assertM(res)(
-          equalTo(
-            Pagination(
+        res.map { pagination =>
+          assertTrue(
+            pagination == Pagination(
               count = PaginationCount.Last(1),
               cursor = PaginationCursor.Before(Base64Cursor(1))
             )
           )
-        )
+        }
       },
-      testM("must set last") {
+      test("must set last") {
         val res = BackwardArgs(
           last = None,
           before = None
-        ).toPagination.run
+        ).toPagination.exit
 
-        assertM(res)(
-          fails(
-            hasMessage(equalTo("last cannot be empty"))
+        res.map(
+          assert(_)(
+            fails(
+              hasMessage(equalTo("last cannot be empty"))
+            )
           )
         )
       },
-      testM("last cannot be negative") {
+      test("last cannot be negative") {
         val res = BackwardArgs(
           last = Some(-1),
           before = None
-        ).toPagination.run
+        ).toPagination.exit
 
-        assertM(res)(
-          fails(
-            hasMessage(equalTo("last cannot be negative"))
+        res.map(
+          assert(_)(
+            fails(
+              hasMessage(equalTo("last cannot be negative"))
+            )
           )
         )
       }

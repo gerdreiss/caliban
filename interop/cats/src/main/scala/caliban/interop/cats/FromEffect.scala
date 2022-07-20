@@ -1,8 +1,8 @@
 package caliban.interop.cats
 
-import cats.~>
 import cats.effect.std.Dispatcher
-import zio.RIO
+import cats.~>
+import zio.{ RIO, Tag, ZEnvironment, ZIO }
 
 /**
  * Describes how [[zio.RIO]] can be created from a polymorphic effect `F`.
@@ -66,11 +66,11 @@ object FromEffect {
    * @tparam R the type of ZIO environment
    */
   trait Contextual[F[_], R] extends FromEffect[F, R] {
-    def fromEffect[A](fa: F[A], env: R): RIO[R, A]
+    def fromEffect[A](fa: F[A], env: ZEnvironment[R]): RIO[R, A]
 
     final def fromEffect[A](fa: F[A]): RIO[R, A] =
       for {
-        env    <- RIO.environment[R]
+        env    <- ZIO.environment[R]
         result <- fromEffect(fa, env)
       } yield result
   }
@@ -85,7 +85,9 @@ object FromEffect {
    * @tparam F $fParam
    * @tparam R $rParam
    */
-  def contextual[F[_], R](dispatcher: Dispatcher[F])(implicit injector: InjectEnv[F, R]): FromEffect.Contextual[F, R] =
+  def contextual[F[_], R: Tag](dispatcher: Dispatcher[F])(implicit
+    injector: InjectEnv[F, R]
+  ): FromEffect.Contextual[F, R] =
     contextual(forDispatcher[F, R](dispatcher))
 
   /**
@@ -96,10 +98,12 @@ object FromEffect {
    * @tparam F $fParam
    * @tparam R $rParam
    */
-  def contextual[F[_], R](from: FromEffect[F, R])(implicit injector: InjectEnv[F, R]): FromEffect.Contextual[F, R] =
+  def contextual[F[_], R: Tag](
+    from: FromEffect[F, R]
+  )(implicit injector: InjectEnv[F, R]): FromEffect.Contextual[F, R] =
     new FromEffect.Contextual[F, R] {
-      def fromEffect[A](fa: F[A], env: R): RIO[R, A] =
-        from.fromEffect(injector.inject(fa, env))
+      def fromEffect[A](fa: F[A], env: ZEnvironment[R]): RIO[R, A] =
+        from.fromEffect(injector.inject(fa, env.get))
     }
 
   /**
@@ -114,7 +118,12 @@ object FromEffect {
   implicit def forDispatcher[F[_], R](implicit dispatcher: Dispatcher[F]): FromEffect[F, R] =
     new FromEffect[F, R] {
       def fromEffect[A](fa: F[A]): RIO[R, A] =
-        zio.interop.fromEffect(fa)
+        ZIO
+          .succeed(dispatcher.unsafeToFutureCancelable(fa))
+          .flatMap { case (future, cancel) =>
+            ZIO.fromFuture(_ => future).onInterrupt(ZIO.fromFuture(_ => cancel()).orDie).interruptible
+          }
+          .uninterruptible
     }
 
 }

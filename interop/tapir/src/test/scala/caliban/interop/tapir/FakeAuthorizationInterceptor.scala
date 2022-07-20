@@ -19,7 +19,7 @@ object FakeAuthorizationInterceptor {
 
   val bearer: RequestInterceptor[Any] =
     new FakeAuthorizationInterceptor[Any](req =>
-      ZIO.fail((401, "You are unauthorized!")).when(req.headers("X-Invalid").nonEmpty)
+      ZIO.fail((401, "You are unauthorized!")).when(req.headers("X-Invalid").nonEmpty).unit
     )
 
 }

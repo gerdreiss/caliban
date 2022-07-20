@@ -2,16 +2,17 @@ package caliban
 
 import caliban.execution.QueryExecution
 import caliban.interop.tapir.ws.Protocol
-import caliban.interop.tapir.{ ws, RequestInterceptor, TapirAdapter, WebSocketHooks }
+import caliban.interop.tapir.{ RequestInterceptor, TapirAdapter, WebSocketHooks }
 import io.circe.parser._
 import io.circe.syntax._
 import sttp.tapir.json.circe._
 import sttp.tapir.server.ziohttp.{ ZioHttpInterpreter, ZioHttpServerOptions }
 import zhttp.http._
+import zhttp.service.ChannelEvent
+import zhttp.service.ChannelEvent.UserEvent.HandshakeComplete
+import zhttp.service.ChannelEvent.{ ChannelRead, UserEventTriggered }
 import zhttp.socket._
 import zio._
-import zio.clock.Clock
-import zio.duration._
 import zio.stream._
 
 object ZHttpAdapter {
@@ -39,7 +40,7 @@ object ZHttpAdapter {
     keepAliveTime: Option[Duration] = None,
     queryExecution: QueryExecution = QueryExecution.Parallel,
     webSocketHooks: WebSocketHooks[R, E] = WebSocketHooks.empty
-  ): HttpApp[R with Clock, E] =
+  ): HttpApp[R, E] =
     Http.fromFunctionZIO[Request] { req =>
       val protocol = req.headers.header("Sec-WebSocket-Protocol") match {
         case Some((_, value)) => Protocol.fromName(value.toString)
@@ -62,15 +63,15 @@ object ZHttpAdapter {
                    case Right(output) => WebSocketFrame.Text(output.asJson.dropNullValues.noSpaces)
                    case Left(close)   => WebSocketFrame.Close(close.code, Some(close.reason))
                  }
-        socket = Socket
-                   .collect[WebSocketFrame] { case WebSocketFrame.Text(text) =>
-                     ZStream
-                       .fromEffect(ZIO.fromEither(decode[GraphQLWSInput](text)))
-                       .mapM(queue.offer) *> ZStream.empty
+        socket = Http
+                   .collectZIO[WebSocketChannelEvent] {
+                     case ChannelEvent(ch, UserEventTriggered(HandshakeComplete)) =>
+                       out.runForeach(ch.writeAndFlush(_)).race(ch.awaitClose)
+                     case ChannelEvent(_, ChannelRead(WebSocketFrame.Text(text))) =>
+                       ZIO.fromEither(decode[GraphQLWSInput](text)).flatMap(queue.offer)
                    }
-                   .merge(Socket.fromStream[Any, Throwable, WebSocketFrame](out))
-        app   <- Response.fromSocketApp[R with Clock](
-                   SocketApp(socket).withProtocol(SocketProtocol.subProtocol(protocol.name))
+        app   <- Response.fromSocketApp(
+                   socket.toSocketApp.withProtocol(SocketProtocol.subProtocol(protocol.name))
                  )
       } yield app
     }

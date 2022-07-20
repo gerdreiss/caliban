@@ -1,7 +1,6 @@
 package example.federation.v2
 
 import caliban.federation.v2._
-import zio.Has
 import zio.query.ZQuery
 
 object FederationData {
@@ -62,11 +61,11 @@ object FederationData {
     case class Episode(
       season: Int,
       episode: Int,
-      characters: ZQuery[Has[CharacterService], Nothing, List[Character]] = ZQuery.succeed(List.empty)
+      characters: ZQuery[CharacterService, Nothing, List[Character]] = ZQuery.succeed(List.empty)
     )
 
-    def queryCharacters(season: Int, episode: Int): ZQuery[Has[CharacterService], Nothing, List[Character]] =
-      ZQuery.fromEffect(CharacterService.getCharactersByEpisode(season, episode))
+    def queryCharacters(season: Int, episode: Int): ZQuery[CharacterService, Nothing, List[Character]] =
+      ZQuery.fromZIO(CharacterService.getCharactersByEpisode(season, episode))
 
     case class CharactersArgs(origin: Option[Origin])
     case class CharacterArgs(name: String)

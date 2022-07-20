@@ -5,11 +5,13 @@ import caliban.GraphQL.graphQL
 import caliban.schema._
 import caliban.tools.{ Options, RemoteSchema, SchemaLoader }
 import caliban.tools.stitching.{ HttpRequest, RemoteResolver, RemoteSchemaResolver, ResolveRequest }
-
+import sttp.capabilities.WebSockets
+import sttp.capabilities.zio.ZioStreams
+import sttp.client3.SttpBackend
 import sttp.client3.asynchttpclient.zio._
 import zio._
 
-object StitchingExample extends GenericSchema[ZEnv] {
+object StitchingExample extends GenericSchema[Any] {
   val GITHUB_API = "https://api.github.com/graphql"
 
   case class AppUser(id: String, name: String, featuredRepository: Repository)
@@ -18,79 +20,80 @@ object StitchingExample extends GenericSchema[ZEnv] {
   case class GetUserQuery(name: String, repository: String)
 
   case class Queries(
-    GetUser: GetUserQuery => URIO[ZEnv, AppUser]
+    GetUser: GetUserQuery => URIO[Any, AppUser]
   )
 
-  val api = for {
-    config     <- ZIO.environment[Has[Configuration]]
-    sttpClient <- ZIO.environment[SttpClient]
+  val api =
+    for {
+      config     <- ZIO.environment[Configuration]
+      sttpClient <- ZIO.environment[SttpBackend[Task, ZioStreams with WebSockets]]
 
-    schemaLoader = SchemaLoader.fromIntrospection(
-                     GITHUB_API,
-                     Some(
-                       List(
-                         Options.Header(
-                           "Authorization",
-                           s"Bearer ${config.get.githubToken}"
+      schemaLoader = SchemaLoader.fromIntrospection(
+                       GITHUB_API,
+                       Some(
+                         List(
+                           Options.Header(
+                             "Authorization",
+                             s"Bearer ${config.get.githubToken}"
+                           )
                          )
                        )
                      )
-                   )
 
-    schema               <- schemaLoader.load
-    remoteSchema         <- ZIO.fromOption(RemoteSchema.parseRemoteSchema(schema))
-    remoteSchemaResolvers = RemoteSchemaResolver.fromSchema(remoteSchema)
-  } yield {
-    val apiRequest =
-      RemoteResolver.toQuery >>> RemoteResolver.request(GITHUB_API) >>> RemoteResolver.fromFunctionM((r: HttpRequest) =>
-        for {
-          config <- ZIO.service[Configuration]
-        } yield r.header("Authorization", s"Bearer ${config.githubToken}")
-      ) >>> RemoteResolver.execute >>> RemoteResolver.unwrap
+      schema               <- schemaLoader.load
+      remoteSchema         <- ZIO.fromOption(RemoteSchema.parseRemoteSchema(schema))
+      remoteSchemaResolvers = RemoteSchemaResolver.fromSchema(remoteSchema)
+    } yield {
+      val apiRequest =
+        RemoteResolver.toQuery >>> RemoteResolver.request(GITHUB_API) >>> RemoteResolver.fromFunctionM(
+          (r: HttpRequest) =>
+            for {
+              config <- ZIO.service[Configuration]
+            } yield r.header("Authorization", s"Bearer ${config.githubToken}")
+        ) >>> RemoteResolver.execute >>> RemoteResolver.unwrap
 
-    implicit val githubProfileSchema: Schema[ZEnv, Repository] =
-      remoteSchemaResolvers
-        .remoteResolver("Repository")(
-          RemoteResolver.fromFunction((r: ResolveRequest[Repository]) =>
-            r.field.copy(
-              name = "repository",
-              arguments = Map(
-                "owner" -> Value.StringValue(r.args.owner),
-                "name"  -> Value.StringValue(r.args.name)
+      implicit val githubProfileSchema: Schema[Any, Repository] =
+        remoteSchemaResolvers
+          .remoteResolver("Repository")(
+            RemoteResolver.fromFunction((r: ResolveRequest[Repository]) =>
+              r.field.copy(
+                name = "repository",
+                arguments = Map(
+                  "owner" -> Value.StringValue(r.args.owner),
+                  "name"  -> Value.StringValue(r.args.name)
+                )
               )
-            )
-          ) >>> apiRequest
-        )
-        .provide(sttpClient ++ config)
+            ) >>> apiRequest
+          )
+          .provideEnvironment(sttpClient ++ config)
 
-    graphQL(
-      RootResolver(
-        Queries(
-          GetUser = query =>
-            random.nextUUID.map(uuid =>
-              AppUser(
-                id = uuid.toString,
-                name = query.name,
-                featuredRepository = Repository(query.name, query.repository)
+      graphQL(
+        RootResolver(
+          Queries(
+            GetUser = query =>
+              Random.nextUUID.map(uuid =>
+                AppUser(
+                  id = uuid.toString,
+                  name = query.name,
+                  featuredRepository = Repository(query.name, query.repository)
+                )
               )
-            )
+          )
         )
       )
-    )
-  }
+    }
 }
 
 case class Configuration(githubToken: String)
 
 object Configuration {
-  def fromEnvironment =
-    (for {
+  def fromEnvironment = ZLayer {
+    for {
       githubToken <- read("GITHUB_TOKEN")
-    } yield Configuration(githubToken)).toLayer
+    } yield Configuration(githubToken)
+  }
 
-  private def read(key: String): Task[String] = Task.effect(
-    sys.env(key)
-  )
+  private def read(key: String): Task[String] = ZIO.attempt(sys.env(key))
 }
 
 import zio.stream._
@@ -98,10 +101,10 @@ import zhttp.http._
 import zhttp.service.Server
 import caliban.ZHttpAdapter
 
-object ExampleApp extends App {
+object ExampleApp extends ZIOAppDefault {
   private val graphiql = Http.fromStream(ZStream.fromResource("graphiql.html"))
 
-  override def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
+  override def run =
     (for {
       api         <- StitchingExample.api
       interpreter <- api.interpreter
@@ -116,7 +119,7 @@ object ExampleApp extends App {
                        )
                        .forever
     } yield ())
-      .provideCustomLayer(
+      .provideSomeLayer[Scope](
         AsyncHttpClientZioBackend.layer() ++ Configuration.fromEnvironment
       )
       .exitCode

@@ -2,11 +2,9 @@ package caliban.reporting
 
 import caliban.client.CalibanClientError.CommunicationError
 import caliban.reporting.ReportingError.{ ClientError, RetryableError }
+import sttp.client3.SttpBackend
 import sttp.client3.UriContext
-import sttp.client3.asynchttpclient.zio.SttpClient
-import zio.duration.durationInt
-import zio.{ Has, IO, Tag, ZIO, ZLayer }
-import zio.system.System
+import zio._
 
 trait SchemaReporter {
   def report[A](ref: SchemaReportingRef[A], withCoreSchema: Boolean): IO[ReportingError, ReportingResponse]
@@ -14,8 +12,8 @@ trait SchemaReporter {
 
 object SchemaReporter {
 
-  def make(accessToken: String): ZIO[Has[SttpClient.Service], Nothing, SchemaReporter] = for {
-    client <- ZIO.service[SttpClient.Service]
+  def make(accessToken: String): ZIO[SttpClient, Nothing, SchemaReporter] = for {
+    client <- ZIO.service[SttpClient]
   } yield new SchemaReporter {
     import caliban.reporting.client.{ Mutation, ReportSchemaError, ReportSchemaResponse, SchemaReport }
 
@@ -41,11 +39,12 @@ object SchemaReporter {
 
     override def report[A](ref: SchemaReportingRef[A], withCoreSchema: Boolean): IO[ReportingError, ReportingResponse] =
       ref.coreSchema.get.flatMap { coreSchema =>
-        Util.hashSchema(coreSchema).flatMap { hash =>
+        val renderedSchema = ref.renderSchema(coreSchema)
+        Util.hashSchema(renderedSchema).flatMap { hash =>
           client
             .send(
               reportSchemaMutation(
-                coreSchema = if (withCoreSchema) Some(coreSchema) else None,
+                coreSchema = if (withCoreSchema) Some(renderedSchema) else None,
                 SchemaReport(
                   bootId = ref.bootId.toString,
                   coreSchemaHash = hash,
@@ -78,19 +77,20 @@ object SchemaReporter {
 
   def fromConfig[R: Tag](
     f: R => String
-  ): ZLayer[Has[R] with Has[SttpClient.Service], Nothing, Has[SchemaReporter]] =
-    fromConfigZIO((r: R) => ZIO.succeed(f(r)))
+  ): ZLayer[R with SttpClient, Nothing, SchemaReporter] =
+    fromConfigZIO[R, Nothing]((r: R) => ZIO.succeed(f(r)))
 
   def fromConfigZIO[R: Tag, E](
     f: R => IO[E, String]
-  ): ZLayer[Has[SttpClient.Service] with Has[R], E, Has[SchemaReporter]] =
-    (for {
-      accessToken <- ZIO.serviceWith[R](f)
+  ): ZLayer[SttpClient with R, E, SchemaReporter] = ZLayer {
+    for {
+      accessToken <- ZIO.serviceWithZIO[R](f)
       reporter    <- make(accessToken)
-    } yield reporter).toLayer
+    } yield reporter
+  }
 
-  def fromDefaultConfig: ZLayer[Has[SttpClient.Service] with System, Throwable, Has[SchemaReporter]] =
-    fromConfigZIO[System.Service, Throwable](
+  def fromDefaultConfig: ZLayer[SttpClient with System, Throwable, SchemaReporter] =
+    fromConfigZIO[System, Throwable](
       _.env("APOLLO_KEY")
         .someOrFail(
           new Exception(

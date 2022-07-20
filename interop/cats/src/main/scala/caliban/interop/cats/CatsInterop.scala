@@ -8,7 +8,7 @@ import caliban.{ CalibanError, GraphQL, GraphQLInterpreter, GraphQLResponse, Inp
 import cats.{ ~>, Monad }
 import cats.effect.Async
 import cats.effect.std.Dispatcher
-import zio.{ RIO, Runtime, Task }
+import zio.{ RIO, Runtime, Tag, Task, ZEnvironment }
 import zio.query.ZQuery
 
 /**
@@ -88,7 +88,7 @@ object CatsInterop {
    * @tparam F $fParam
    * @tparam R $rParam
    */
-  def contextual[F[_]: Async, R](dispatcher: Dispatcher[F])(implicit
+  def contextual[F[_]: Async, R: Tag](dispatcher: Dispatcher[F])(implicit
     injector: InjectEnv[F, R],
     runtime: Runtime[R]
   ): Contextual[F, R] =
@@ -102,12 +102,14 @@ object CatsInterop {
    * @tparam F $fParam
    * @tparam R $rParam
    */
-  def contextual[F[_]: Monad, R](underlying: CatsInterop[F, R])(implicit injector: InjectEnv[F, R]): Contextual[F, R] =
+  def contextual[F[_]: Monad, R: Tag](
+    underlying: CatsInterop[F, R]
+  )(implicit injector: InjectEnv[F, R]): Contextual[F, R] =
     new CatsInterop.Contextual[F, R] {
       private val to   = ToEffect.contextual(underlying)
       private val from = FromEffect.contextual(underlying)
 
-      def fromEffect[A](fa: F[A], env: R): RIO[R, A] =
+      def fromEffect[A](fa: F[A], env: ZEnvironment[R]): RIO[R, A] =
         from.fromEffect(fa, env)
 
       def toEffect[A](rio: RIO[R, A], env: R): F[A] =
@@ -201,7 +203,7 @@ object CatsInterop {
         ev.optional
 
       override def resolve(value: F[A]): Step[R] =
-        QueryStep(ZQuery.fromEffect(interop.fromEffect(value).map(ev.resolve)))
+        QueryStep(ZQuery.fromZIO(interop.fromEffect(value).map(ev.resolve)))
     }
 
   @deprecated("Use `CatsInterop[F, Any].fromEffect` or `FromEffect[F, Any].fromEffect`", "1.4.0")

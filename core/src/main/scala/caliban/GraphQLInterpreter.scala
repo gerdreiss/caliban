@@ -2,7 +2,7 @@ package caliban
 
 import caliban.Value.NullValue
 import caliban.execution.QueryExecution
-import zio.{ Has, IO, NeedsEnv, Tag, URIO, ZEnv, ZLayer }
+import zio._
 
 /**
  * A `GraphQLInterpreter[-R, +E]` represents a GraphQL interpreter whose execution requires
@@ -18,7 +18,7 @@ trait GraphQLInterpreter[-R, +E] { self =>
    * @param query a string containing the GraphQL query.
    * @return an effect that either fails with a [[CalibanError]] or succeeds with `Unit`
    */
-  def check(query: String): IO[CalibanError, Unit]
+  def check(query: String)(implicit trace: Trace): IO[CalibanError, Unit]
 
   /**
    * Parses, validates and finally runs the provided request against this interpreter.
@@ -33,7 +33,7 @@ trait GraphQLInterpreter[-R, +E] { self =>
     skipValidation: Boolean = false,
     enableIntrospection: Boolean = true,
     queryExecution: QueryExecution = QueryExecution.Parallel
-  ): URIO[R, GraphQLResponse[E]]
+  )(implicit trace: Trace): URIO[R, GraphQLResponse[E]]
 
   /**
    * Parses, validates and finally runs the provided query against this interpreter.
@@ -54,7 +54,7 @@ trait GraphQLInterpreter[-R, +E] { self =>
     skipValidation: Boolean = false,
     enableIntrospection: Boolean = true,
     queryExecution: QueryExecution = QueryExecution.Parallel
-  ): URIO[R, GraphQLResponse[E]] =
+  )(implicit trace: Trace): URIO[R, GraphQLResponse[E]] =
     executeRequest(
       GraphQLRequest(Some(query), operationName, Some(variables), Some(extensions)),
       skipValidation = skipValidation,
@@ -75,30 +75,22 @@ trait GraphQLInterpreter[-R, +E] { self =>
    * Provides the interpreter with its required environment, which eliminates
    * its dependency on `R`.
    */
-  final def provide(r: R)(implicit ev: NeedsEnv[R]): GraphQLInterpreter[Any, E] = wrapExecutionWith(_.provide(r))
+  final def provideEnvironment(r: => ZEnvironment[R]): GraphQLInterpreter[Any, E] =
+    wrapExecutionWith(_.provideEnvironment(r))
 
   /**
    * Provides a layer to this interpreter, which translates it to another level.
    */
-  final def provideLayer[E1 >: E, R0, R1 <: Has[_]](
-    layer: ZLayer[R0, E1, R1]
-  )(implicit ev1: R1 <:< R, ev2: NeedsEnv[R]): GraphQLInterpreter[R0, E1] =
+  final def provideLayer[E1 >: E, R0](
+    layer: => ZLayer[R0, E1, R]
+  ): GraphQLInterpreter[R0, E1] =
     wrapExecutionWith(_.provideLayer(layer).fold(e => GraphQLResponse(NullValue, List(e)), identity))
-
-  /**
-   * Provides the part of the environment that is not part of the `ZEnv`,
-   * leaving a query that only depends on the `ZEnv`.
-   */
-  final def provideCustomLayer[E1 >: E, R1 <: Has[_]](
-    layer: ZLayer[ZEnv, E1, R1]
-  )(implicit ev: ZEnv with R1 <:< R, tagged: Tag[R1]): GraphQLInterpreter[ZEnv, E1] =
-    provideSomeLayer[ZEnv](layer)
 
   /**
    * Splits the environment into two parts, providing one part using the
    * specified layer and leaving the remainder `R0`.
    */
-  final def provideSomeLayer[R0 <: Has[_]]: GraphQLInterpreter.ProvideSomeLayer[R0, R, E] =
+  final def provideSomeLayer[R0]: GraphQLInterpreter.ProvideSomeLayer[R0, R, E] =
     new GraphQLInterpreter.ProvideSomeLayer[R0, R, E](self)
 
   /**
@@ -110,13 +102,13 @@ trait GraphQLInterpreter[-R, +E] { self =>
   final def wrapExecutionWith[R2, E2](
     f: URIO[R, GraphQLResponse[E]] => URIO[R2, GraphQLResponse[E2]]
   ): GraphQLInterpreter[R2, E2] = new GraphQLInterpreter[R2, E2] {
-    override def check(query: String): IO[CalibanError, Unit] = self.check(query)
+    override def check(query: String)(implicit trace: Trace): IO[CalibanError, Unit] = self.check(query)
     override def executeRequest(
       request: GraphQLRequest,
       skipValidation: Boolean,
       enableIntrospection: Boolean,
       queryExecution: QueryExecution
-    ): URIO[R2, GraphQLResponse[E2]] =
+    )(implicit trace: Trace): URIO[R2, GraphQLResponse[E2]] =
       f(self.executeRequest(request, skipValidation = skipValidation, enableIntrospection, queryExecution))
   }
 
@@ -124,10 +116,10 @@ trait GraphQLInterpreter[-R, +E] { self =>
 
 object GraphQLInterpreter {
 
-  final class ProvideSomeLayer[R0 <: Has[_], -R, +E](private val self: GraphQLInterpreter[R, E]) extends AnyVal {
-    def apply[E1 >: E, R1 <: Has[_]](
-      layer: ZLayer[R0, E1, R1]
-    )(implicit ev1: R0 with R1 <:< R, ev2: NeedsEnv[R], tagged: Tag[R1]): GraphQLInterpreter[R0, E1] =
-      self.provideLayer[E1, R0, R0 with R1](ZLayer.identity[R0] ++ layer)
+  final class ProvideSomeLayer[R0, -R, +E](private val self: GraphQLInterpreter[R, E]) extends AnyVal {
+    def apply[E1 >: E, R1](
+      layer: => ZLayer[R0, E1, R1]
+    )(implicit ev1: R0 with R1 <:< R, tagged: Tag[R1]): GraphQLInterpreter[R0, E1] =
+      self.asInstanceOf[GraphQLInterpreter[R0 with R1, E]].provideLayer(ZLayer.environment[R0] ++ layer)
   }
 }

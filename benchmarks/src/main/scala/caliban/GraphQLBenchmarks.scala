@@ -1,9 +1,5 @@
 package caliban
 
-import scala.concurrent.duration._
-import scala.concurrent.{ Await, ExecutionContextExecutor, Future }
-import scala.language.postfixOps
-import java.util.concurrent.TimeUnit
 import caliban.Data._
 import caliban.GraphQL._
 import io.circe.Json
@@ -13,8 +9,12 @@ import sangria.macros.derive._
 import sangria.marshalling.circe._
 import sangria.parser.QueryParser
 import sangria.schema._
-import zio.internal.Platform
-import zio.{ BootstrapRuntime, Runtime, UIO, ZEnv }
+import zio.{ Runtime, Task, UIO, Unsafe, ZIO }
+
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration._
+import scala.concurrent.{ Await, ExecutionContextExecutor, Future }
+import scala.language.postfixOps
 
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.Throughput))
@@ -223,9 +223,7 @@ class GraphQLBenchmarks {
               }
                 """
 
-  val runtime: Runtime[ZEnv] = new BootstrapRuntime {
-    override val platform: Platform = Platform.benchmark
-  }
+  private val runtime = Runtime.default
 
   case class CharactersArgs(origin: Option[Origin])
   case class CharacterArgs(name: String)
@@ -237,31 +235,33 @@ class GraphQLBenchmarks {
 
   val resolver: RootResolver[Query, Unit, Unit] = RootResolver(
     Query(
-      args => UIO(Data.characters.filter(c => args.origin.forall(c.origin == _))),
-      args => UIO(Data.characters.find(c => c.name == args.name))
+      args => ZIO.succeed(Data.characters.filter(c => args.origin.forall(c.origin == _))),
+      args => ZIO.succeed(Data.characters.find(c => c.name == args.name))
     )
   )
 
-  val interpreter: GraphQLInterpreter[Any, CalibanError] = runtime.unsafeRun(graphQL(resolver).interpreter)
+  def run[A](zio: Task[A]): A = Unsafe.unsafe(implicit u => runtime.unsafe.run(zio).getOrThrow())
+
+  val interpreter: GraphQLInterpreter[Any, CalibanError] = run(graphQL(resolver).interpreter)
 
   @Benchmark
   def simpleCaliban(): Unit = {
     val io = interpreter.execute(simpleQuery)
-    runtime.unsafeRun(io)
+    run(io)
     ()
   }
 
   @Benchmark
   def introspectCaliban(): Unit = {
     val io = interpreter.execute(fullIntrospectionQuery)
-    runtime.unsafeRun(io)
+    run(io)
     ()
   }
 
   @Benchmark
   def fragmentsCaliban(): Unit = {
     val io = interpreter.execute(fragmentsQuery)
-    runtime.unsafeRun(io)
+    run(io)
     ()
   }
 
@@ -361,7 +361,7 @@ class GraphQLBenchmarks {
           new NoUndefinedVariables,
           new NoUnusedFragments,
           new NoUnusedVariables,
-          //new OverlappingFieldsCanBeMerged,
+          // new OverlappingFieldsCanBeMerged,
           new experimental.OverlappingFieldsCanBeMerged,
           new PossibleFragmentSpreads,
           new ProvidedRequiredArguments,

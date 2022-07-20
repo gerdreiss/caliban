@@ -7,7 +7,7 @@ import zhttp.http._
 import zhttp.service.Server
 import zio._
 
-object FederatedApp extends App {
+object FederatedApp extends ZIOAppDefault {
 
   val characterServer = for {
     interpreter <- FederatedApi.Characters.api.interpreter
@@ -33,8 +33,8 @@ object FederatedApp extends App {
                      .forever
   } yield ()
 
-  override def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
+  override def run =
     (characterServer race episodeServer)
-      .provideCustomLayer(EpisodeService.make(sampleEpisodes) ++ CharacterService.make(sampleCharacters))
+      .provideLayer(EpisodeService.make(sampleEpisodes) ++ CharacterService.make(sampleCharacters))
       .exitCode
 }

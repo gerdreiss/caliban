@@ -16,9 +16,7 @@ import sttp.tapir.json.play._
 import sttp.tapir.model.ServerRequest
 import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.play.{ PlayServerInterpreter, PlayServerOptions }
-import zio.{ RIO, Runtime, ZIO, ZQueue }
-import zio.duration.Duration
-import zio.random.Random
+import zio._
 import zio.stream.ZStream
 
 import scala.concurrent.{ ExecutionContext, Future }
@@ -50,7 +48,7 @@ class PlayAdapter private (private val options: Option[PlayServerOptions]) {
     enableIntrospection: Boolean = true,
     queryExecution: QueryExecution = QueryExecution.Parallel,
     requestInterceptor: RequestInterceptor[R] = RequestInterceptor.empty
-  )(implicit runtime: Runtime[R with Random], materializer: Materializer): Routes = {
+  )(implicit runtime: Runtime[R], materializer: Materializer): Routes = {
     val endpoint = TapirAdapter.makeHttpUploadService[R, E](
       interpreter,
       skipValidation,
@@ -126,26 +124,28 @@ object PlayAdapter extends PlayAdapter(None) {
       _ =>
         _ =>
           req =>
-            runtime
-              .unsafeRunToFuture(endpoint.logic(zioMonadError)(())(req))
-              .future
+            Unsafe
+              .unsafe(implicit u => runtime.unsafe.runToFuture(endpoint.logic(zioMonadError)(())(req)).future)
               .map(_.map { zioPipe =>
                 val io =
                   for {
-                    inputQueue     <- ZQueue.unbounded[GraphQLWSInput]
+                    inputQueue     <- Queue.unbounded[GraphQLWSInput]
                     input           = ZStream.fromQueue(inputQueue)
                     output          = zioPipe(input)
-                    sink            = Sink.foreachAsync[GraphQLWSInput](1)(input =>
-                                        runtime.unsafeRunToFuture(inputQueue.offer(input).unit).future
-                                      )
+                    sink            =
+                      Sink.foreachAsync[GraphQLWSInput](1)(input =>
+                        Unsafe.unsafe(implicit u => runtime.unsafe.runToFuture(inputQueue.offer(input).unit).future)
+                      )
                     (queue, source) =
                       Source.queue[Either[GraphQLWSClose, GraphQLWSOutput]](0, OverflowStrategy.fail).preMaterialize()
                     fiber          <- output.foreach(msg => ZIO.fromFuture(_ => queue.offer(msg))).forkDaemon
                     flow            = Flow.fromSinkAndSourceCoupled(sink, source).watchTermination() { (_, f) =>
-                                        f.onComplete(_ => runtime.unsafeRun(fiber.interrupt))
+                                        f.onComplete(_ =>
+                                          Unsafe.unsafe(implicit u => runtime.unsafe.run(fiber.interrupt).getOrThrowFiberFailure())
+                                        )
                                       }
                   } yield flow
-                runtime.unsafeRun(io)
+                Unsafe.unsafe(implicit u => runtime.unsafe.run(io).getOrThrowFiberFailure())
               })
     )
 }

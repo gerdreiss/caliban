@@ -11,10 +11,7 @@ import caliban.{ AkkaHttpAdapter, RootResolver }
 import sttp.model.StatusCode
 import sttp.tapir.json.circe._
 import sttp.tapir.model.ServerRequest
-import zio.blocking.Blocking
-import zio.internal.Platform
-import zio.random.Random
-import zio.{ FiberRef, Has, RIO, Runtime, ZIO }
+import zio.{ FiberRef, RIO, Runtime, Unsafe, ZIO, ZLayer }
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.io.StdIn
@@ -23,7 +20,7 @@ object AuthExampleApp extends App {
 
   case class AuthToken(value: String)
 
-  type Auth = Has[FiberRef[Option[AuthToken]]]
+  type Auth = FiberRef[Option[AuthToken]]
 
   object AuthInterceptor extends RequestInterceptor[Auth] {
     override def apply[R <: Auth, A](
@@ -32,7 +29,7 @@ object AuthExampleApp extends App {
       request.headers.collectFirst {
         case header if header.is("token") => header.value
       } match {
-        case Some(token) => ZIO.accessM[Auth](_.get.set(Some(AuthToken(token)))) *> effect
+        case Some(token) => ZIO.serviceWithZIO[Auth](_.set(Some(AuthToken(token)))) *> effect
         case _           => ZIO.fail(TapirResponse(StatusCode.Forbidden))
       }
   }
@@ -40,7 +37,7 @@ object AuthExampleApp extends App {
   val schema: GenericSchema[Auth] = new GenericSchema[Auth] {}
   import schema._
   case class Query(token: RIO[Auth, Option[String]])
-  private val resolver            = RootResolver(Query(ZIO.accessM[Auth](_.get.get).map(_.map(_.value))))
+  private val resolver            = RootResolver(Query(ZIO.serviceWithZIO[Auth](_.get).map(_.map(_.value))))
   private val api                 = graphQL(resolver)
 
   implicit val system: ActorSystem                        = ActorSystem()
@@ -50,11 +47,13 @@ object AuthExampleApp extends App {
   // pass on so that they are present in the environment for our ContextWrapper(s)
   // For the auth we wrap in an option, but you could just as well use something
   // like AuthToken("__INVALID") or a sealed trait hierarchy with an invalid member
-  val initLayer                                                 = FiberRef.make(Option.empty[AuthToken]).toLayer ++ Blocking.live ++ Random.live
-  implicit val runtime: Runtime[Auth with Blocking with Random] = Runtime.unsafeFromLayer(initLayer, Platform.default)
+  val initLayer: ZLayer[Any, Nothing, FiberRef[Option[AuthToken]]] =
+    ZLayer.scoped(FiberRef.make(Option.empty[AuthToken]))
 
-  val interpreter = runtime.unsafeRun(api.interpreter)
-  val adapter = AkkaHttpAdapter.default(system.dispatcher)
+  implicit val runtime: Runtime[Auth] = Unsafe.unsafe(implicit u => Runtime.unsafe.fromLayer(initLayer))
+
+  val interpreter = Unsafe.unsafe(implicit u => runtime.unsafe.run(api.interpreter).getOrThrow())
+  val adapter     = AkkaHttpAdapter.default
 
   val route =
     path("api" / "graphql") {

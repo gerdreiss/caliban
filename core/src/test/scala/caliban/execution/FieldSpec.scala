@@ -10,7 +10,7 @@ import caliban.validation.Validator
 import zio._
 import zio.test._
 
-object FieldSpec extends DefaultRunnableSpec {
+object FieldSpec extends ZIOSpecDefault {
 
   sealed trait Union
   @GQLInterface
@@ -61,7 +61,7 @@ object FieldSpec extends DefaultRunnableSpec {
   } yield req
 
   private val targetsSpec = suite("targets")(
-    testM("gets populated with inline fragments") {
+    test("gets populated with inline fragments") {
       val query = gqldoc("""{
               union { ...on Interface { id }  }
             }""")
@@ -71,7 +71,7 @@ object FieldSpec extends DefaultRunnableSpec {
         actual  = fields.flatMap(_.targets.getOrElse(Set.empty)).toSet
       } yield assertTrue(actual == Set("Interface"))
     },
-    testM("doesn't get populated with mismatching type conditions") {
+    test("doesn't get populated with mismatching type conditions") {
       val query = gqldoc("""{
               union { ...on B { id }  }
             }""")
@@ -81,7 +81,7 @@ object FieldSpec extends DefaultRunnableSpec {
         actual  = fields.flatMap(_.targets.getOrElse(Set.empty)).toSet
       } yield assertTrue(actual == Set.empty[String])
     },
-    testM("gets populated with named fragment") {
+    test("gets populated with named fragment") {
       val query = gqldoc("""
         fragment Frag on A {
           id
@@ -95,7 +95,7 @@ object FieldSpec extends DefaultRunnableSpec {
         actual  = fields.flatMap(_.targets.getOrElse(Set.empty)).toSet
       } yield assertTrue(actual == Set("A"))
     },
-    testM("gets populated with unnamed fragment") {
+    test("gets populated with unnamed fragment") {
       val query = gqldoc("""
         {
           union { ... { id } }
@@ -109,7 +109,7 @@ object FieldSpec extends DefaultRunnableSpec {
   )
 
   private val fieldTypesSpec = suite("field types")(
-    testM("fetching from a union with an interface using an inline fragment") {
+    test("fetching from a union with an interface using an inline fragment") {
 
       val query = gqldoc("""{
         union {
@@ -149,7 +149,7 @@ object FieldSpec extends DefaultRunnableSpec {
         )
       )
     },
-    testM("fetching from a union with an interface using a named fragment") {
+    test("fetching from a union with an interface using a named fragment") {
 
       val query = gqldoc("""
         fragment Frag on Interface {
@@ -189,7 +189,7 @@ object FieldSpec extends DefaultRunnableSpec {
         )
       )
     },
-    testM("fetching from an interface using an inline fragment") {
+    test("fetching from an interface using an inline fragment") {
 
       val query = gqldoc("""{
         interface {

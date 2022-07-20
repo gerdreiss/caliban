@@ -4,11 +4,10 @@ import caliban.{ GraphQLWSOutput, ResponseValue, Value }
 import play.api.libs.json._
 import zio.test.Assertion.{ equalTo, isRight }
 import zio.test._
-import zio.test.environment.TestEnvironment
 
-object GraphQLWSOutputPlaySpec extends DefaultRunnableSpec {
+object GraphQLWSOutputPlaySpec extends ZIOSpecDefault {
 
-  override def spec: ZSpec[TestEnvironment, Any] =
+  override def spec =
     suite("GraphQLWSOutputPlaySpec")(
       test("can be parsed from JSON by play") {
         val request = Json
@@ -38,11 +37,7 @@ object GraphQLWSOutputPlaySpec extends DefaultRunnableSpec {
           payload = Some(ResponseValue.ObjectValue(List("field" -> Value.StringValue("yo"))))
         )
 
-        assert(Json.toJson(res).toString())(
-          equalTo(
-            """{"type":"some type","id":"id","payload":{"field":"yo"}}"""
-          )
-        )
+        assertTrue(Json.toJson(res).toString() == """{"type":"some type","id":"id","payload":{"field":"yo"}}""")
       }
     )
 }

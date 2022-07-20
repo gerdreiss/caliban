@@ -185,7 +185,7 @@ object CostEstimation {
           for {
             req <- process(doc)
             cost = computeCost(req.field)(f)
-            _   <- IO.when(cost > maxCost)(IO.fail(error(cost)))
+            _   <- ZIO.when(cost > maxCost)(ZIO.fail(error(cost)))
           } yield req
     }
 
@@ -204,8 +204,8 @@ object CostEstimation {
           for {
             req  <- process(doc)
             cost <- computeCostZIO(req.field)(f)
-            _    <- IO.when(cost > maxCost)(
-                      IO.fail(ValidationError(s"Query costs too much: $cost. Max cost: $maxCost.", ""))
+            _    <- ZIO.when(cost > maxCost)(
+                      ZIO.fail(ValidationError(s"Query costs too much: $cost. Max cost: $maxCost.", ""))
                     )
           } yield req
     }
@@ -229,8 +229,9 @@ object CostEstimation {
       ): Document => ZIO[R1, ValidationError, ExecutionRequest] =
         (doc: Document) =>
           for {
-            req <- process(doc)
-            _   <- computeCostZIO(req.field)(f) >>= total.set
+            req  <- process(doc)
+            cost <- computeCostZIO(req.field)(f)
+            _    <- total.set(cost)
           } yield req
     }
 
@@ -238,7 +239,7 @@ object CostEstimation {
     cost: Double,
     resp: GraphQLResponse[CalibanError]
   ): UIO[GraphQLResponse[CalibanError]] =
-    UIO.succeed(
+    ZIO.succeed(
       resp.copy(
         extensions = Some(
           ObjectValue(
@@ -278,7 +279,7 @@ object CostEstimation {
         go(head.fields ++ tail, f(head) :: result)
     }
 
-    URIO.mergeAllPar(go(List(field), Nil))(0.0)(_ + _)
+    ZIO.mergeAllPar(go(List(field), Nil))(0.0)(_ + _)
   }
 
 }

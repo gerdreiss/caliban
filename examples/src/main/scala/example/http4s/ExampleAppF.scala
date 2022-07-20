@@ -13,17 +13,14 @@ import org.http4s.blaze.server.BlazeServerBuilder
 import org.http4s.implicits._
 import org.http4s.server.Router
 import org.http4s.server.middleware.CORS
-import zio.Runtime
-import zio.clock.Clock
-import zio.console.Console
-import zio.internal.Platform
+import zio.{ Runtime, Unsafe }
 
 object ExampleAppF extends IOApp {
 
-  type MyEnv = Console with Clock with ExampleService
+  type MyEnv = ExampleService
 
   implicit val zioRuntime: Runtime[MyEnv] =
-    Runtime.unsafeFromLayer(ExampleService.make(sampleCharacters) ++ Console.live ++ Clock.live, Platform.default)
+    Unsafe.unsafe(implicit u => Runtime.unsafe.fromLayer(ExampleService.make(sampleCharacters)))
 
   override def run(args: List[String]): IO[ExitCode] =
     Dispatcher[IO].use { implicit dispatcher =>

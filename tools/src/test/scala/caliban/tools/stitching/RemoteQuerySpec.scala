@@ -1,20 +1,15 @@
 package caliban.tools.stitching
 
+import caliban.CalibanError.ValidationError
 import caliban.GraphQL.graphQL
 import caliban.Macros.gqldoc
-import caliban.RootResolver
-import caliban.schema.Annotations.GQLInterface
-import caliban.schema._
-import zio._
-import zio.test.DefaultRunnableSpec
-import zio.test.ZSpec
-import zio.test._
+import caliban.{ CalibanError, GraphQLInterpreter, RootResolver }
 import caliban.execution.Field
+import caliban.schema.Annotations.GQLInterface
+import zio._
+import zio.test._
 
-import Assertion._
-import caliban.parsing.adt.Selection
-
-object RemoteQuerySpec extends DefaultRunnableSpec {
+object RemoteQuerySpec extends ZIOSpecDefault {
   sealed trait Union
   @GQLInterface
   sealed trait Interface
@@ -30,7 +25,7 @@ object RemoteQuerySpec extends DefaultRunnableSpec {
     interface: Interface
   )
 
-  def api(ref: Ref[String]) = {
+  def api(ref: Ref[String]): IO[ValidationError, GraphQLInterpreter[Any, CalibanError]] = {
     val api = graphQL(
       RootResolver(
         Queries(
@@ -47,8 +42,8 @@ object RemoteQuerySpec extends DefaultRunnableSpec {
     api.interpreter
   }
 
-  def spec: ZSpec[Environment, Failure] = suite("RemoteQuerySpec")(
-    testM("correctly renders a query for a field") {
+  override def spec = suite("RemoteQuerySpec")(
+    test("correctly renders a query for a field") {
       val query = gqldoc("""{
               union(value: "foo\"") { ...on Interface { id }  }
             }""")
@@ -60,7 +55,7 @@ object RemoteQuerySpec extends DefaultRunnableSpec {
         actual <- ref.get
       } yield assertTrue(actual == """query { union(value: "foo\"") { ...on Interface { id } } }""")
     },
-    testM("correctly renders a query for a field") {
+    test("correctly renders a query for a field") {
       val query = gqldoc("""{
               union(value: "bar") { ...on Interface { id } ...on A { id } ...on B { id }  }
             }""")

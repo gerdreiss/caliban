@@ -7,7 +7,7 @@ import java.security.MessageDigest
 object Util {
 
   private[caliban] def hashSchema(schema: String): Task[String] =
-    ZIO.effect(
+    ZIO.attempt(
       MessageDigest
         .getInstance("SHA-256")
         .digest(schema.getBytes("UTF-8"))

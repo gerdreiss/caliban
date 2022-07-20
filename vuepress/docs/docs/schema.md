@@ -192,7 +192,6 @@ Fields can return ZIO effects. This allows you to leverage all the features prov
 
 ```scala mdoc:silent:nest
 import zio._
-import zio.console.Console
 
 type CharacterName = String
 case class Queries(characters: Task[List[Character]],
@@ -220,7 +219,7 @@ implicit val queriesSchema: Schema[MyEnv, Queries] = Schema.gen
 If you require a ZIO environment and use Scala 3, things are simpler since you don't need `GenericSchema`. Make sure to use `Schema.gen` with the proper R type parameter.
 To make sure Caliban uses the proper environment, you need to specify it explicitly to `graphQL(...)`, unless you already have `Schema` instances for your root operations in scope.
 ```scala mdoc:silent
-val queries = Queries(Task(???), _ => RIO(???))
+val queries = Queries(ZIO.attempt(???), _ => ZIO.succeed(???))
 val api = GraphQL.graphQL[MyEnv, Queries, Unit, Unit](RootResolver(queries))
 // or
 // implicit val queriesSchema: Schema[MyEnv, Queries] = Schema.gen
@@ -295,7 +294,7 @@ Caliban can automatically generate Scala code from a GraphQL schema.
 
 In order to use this feature, add the `caliban-codegen-sbt` sbt plugin to your `project/plugins.sbt` file:
 ```scala
-addSbtPlugin("com.github.ghostdogpr" % "caliban-codegen-sbt" % "1.4.1")
+addSbtPlugin("com.github.ghostdogpr" % "caliban-codegen-sbt" % "2.0.0")
 ```
 
 And enable it in your `build.sbt` file:

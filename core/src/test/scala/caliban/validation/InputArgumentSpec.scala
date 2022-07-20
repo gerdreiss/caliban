@@ -6,9 +6,8 @@ import caliban.schema.ArgBuilder
 import caliban.schema.Schema
 import caliban.schema.Step
 import zio.test._
-import zio.test.environment.TestEnvironment
 
-object InputArgumentSpec extends DefaultRunnableSpec {
+object InputArgumentSpec extends ZIOSpecDefault {
   sealed trait Enum
   case object Valid extends Enum
 
@@ -59,9 +58,9 @@ object InputArgumentSpec extends DefaultRunnableSpec {
     res <- int.executeRequest(GraphQLRequest(query = Some(query), variables = Some(variables)))
   } yield res
 
-  override def spec: ZSpec[TestEnvironment, Any] =
+  override def spec =
     suite("InputArgumentSpec")(
-      testM("non-null") {
+      test("non-null") {
         val query =
           """query QueryName($bool: Boolean!) {
             |  bool(input: $bool)
@@ -85,7 +84,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
         )
       },
       suite("bools")(
-        testM("invalid coercion") {
+        test("invalid coercion") {
           val query =
             """query QueryName($bool: Boolean!) {
               |  bool(input: $bool)
@@ -108,7 +107,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("valid coercion") {
+        test("valid coercion") {
           val query =
             """query QueryName($bool: Boolean!) {
               |  bool(input: $bool)
@@ -126,7 +125,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
         }
       ),
       suite("strings")(
-        testM("invalid coercion") {
+        test("invalid coercion") {
           val query =
             """query QueryName($string: String!) {
               |  string(input: $string)
@@ -149,7 +148,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("valid coercion") {
+        test("valid coercion") {
           val query =
             """query QueryName($string: String!) {
               |  string(input: $string)
@@ -167,7 +166,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
         }
       ),
       suite("ints")(
-        testM("invalid coercion") {
+        test("invalid coercion") {
           val query =
             """query QueryName($int: Int!) {
               |  int(input: $int)
@@ -190,7 +189,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("valid coercion") {
+        test("valid coercion") {
           val query =
             """query QueryName($int: Int!) {
               |  int(input: $int)
@@ -208,7 +207,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
         }
       ),
       suite("floats")(
-        testM("invalid coercion") {
+        test("invalid coercion") {
           val query =
             """query QueryName($float: Float!) {
               |  float(input: $float)
@@ -231,7 +230,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("valid coercion (int -> float)") {
+        test("valid coercion (int -> float)") {
           val query =
             """query QueryName($float: Float!) {
               |  float(input: $float)
@@ -247,7 +246,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
                    )
           } yield assertTrue(res.errors == List())
         },
-        testM("valid coercion (long -> float)") {
+        test("valid coercion (long -> float)") {
           val query =
             """query QueryName($float: Float!) {
               |  float(input: $float)
@@ -263,7 +262,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
                    )
           } yield assertTrue(res.errors == List())
         },
-        testM("valid coercion (bigint -> float)") {
+        test("valid coercion (bigint -> float)") {
           val query =
             """query QueryName($float: Float!) {
               |  float(input: $float)
@@ -281,7 +280,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
         }
       ),
       suite("enums")(
-        testM("invalid coercion") {
+        test("invalid coercion") {
           val query =
             """query QueryName($enum: Enum) {
               |  enum(input: $enum)
@@ -304,7 +303,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("valid coercion") {
+        test("valid coercion") {
           val query =
             """query QueryName($enum: Enum!) {
               |  enum(input: $enum)
@@ -322,7 +321,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
         }
       ),
       suite("lists")(
-        testM("invalid coercion") {
+        test("invalid coercion") {
           val query =
             """query QueryName($list: [String!]!) {
               |  list(input: $list)
@@ -345,7 +344,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("invalid coercion") {
+        test("invalid coercion") {
           val query =
             """query QueryName($list: [String!]!) {
               |  list(input: $list)
@@ -368,7 +367,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("valid coercion") {
+        test("valid coercion") {
           val query =
             """query QueryName($list: [String!]!) {
               |  list(input: $list)
@@ -386,7 +385,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
         },
         // test cases from http://spec.graphql.org/October2021/#sec-List.Input-Coercion
         suite("[Int]")(
-          testM("[1, 2, 3] -> [1, 2, 3]") {
+          test("[1, 2, 3] -> [1, 2, 3]") {
             val query = """
               query QueryName($input: [Int!]!) {
                 listInt(input: $input)
@@ -399,7 +398,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
               res <- execute(query, vars)
             } yield assertTrue(res.data == ResponseValue.ObjectValue(List("listInt" -> ResponseValue.ListValue(list))))
           },
-          testM("""[1, "b", true, 4] -> errors""") {
+          test("""[1, "b", true, 4] -> errors""") {
             val query = """
               query QueryName($input: [Int!]!) {
                 listInt(input: $input)
@@ -419,7 +418,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
               )
             )
           },
-          testM("1 -> [1]") {
+          test("1 -> [1]") {
             val query = """
               query QueryName($input: [Int!]!) {
                 listInt(input: $input)
@@ -434,7 +433,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
               res.data == ResponseValue.ObjectValue(List("listInt" -> ResponseValue.ListValue(List(input))))
             )
           },
-          testM("null -> null") {
+          test("null -> null") {
             val query = """
               query QueryName($input: [Int]) {
                 listInt(input: $input)
@@ -449,7 +448,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
           }
         ),
         suite("[[Int]]")(
-          testM("[[1], [2, 3]] -> [[1], [2, 3]]") {
+          test("[[1], [2, 3]] -> [[1], [2, 3]]") {
             val query = """
               query QueryName($input: [[Int!]!]!) {
                 listListInt(input: $input)
@@ -477,7 +476,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           },
           // note that the spec says this should be an error, but the reference implementation allows it
-          testM("[1, 2, 3] -> [[1], [2], [3]]") {
+          test("[1, 2, 3] -> [[1], [2], [3]]") {
             val query = """
               query QueryName($input: [[Int!]!]!) {
                 listListInt(input: $input)
@@ -502,7 +501,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
               )
             )
           },
-          testM("1 -> [[1]]") {
+          test("1 -> [[1]]") {
             val query = """
               query QueryName($input: [[Int!]!]!) {
                 listListInt(input: $input)
@@ -519,7 +518,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
               )
             )
           },
-          testM("null -> null") {
+          test("null -> null") {
             val query = """
               query QueryName($input: [[Int]]) {
                 listListInt(input: $input)
@@ -532,7 +531,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
               res <- execute(query, vars)
             } yield assertTrue(res.data == ResponseValue.ObjectValue(List("listListInt" -> input)))
           },
-          testM("[1, [null], null] -> [[1], [null], null]") {
+          test("[1, [null], null] -> [[1], [null], null]") {
             val query = """
               query QueryName($input: [[Int]]) {
                 listListInt(input: $input)
@@ -560,7 +559,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
         ) @@ TestAspect.scala2Only
       ),
       suite("input objects")(
-        testM("invalid coercion") {
+        test("invalid coercion") {
           val query =
             """query QueryName($input: InputObjectInput!) {
               |  input(input: $input)
@@ -591,7 +590,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("valid coercion") {
+        test("valid coercion") {
           val query =
             """query QueryName($input: InputObjectInput!) {
               |  input(input: $input)
@@ -616,7 +615,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
           } yield assertTrue(res.errors == List())
         },
         // test cases from http://spec.graphql.org/October2021/#sec-Input-Objects.Input-Coercion
-        testM("""{ a: "abc", b: 123 } + {} -> { a: "abc", b: 123 }""") {
+        test("""{ a: "abc", b: 123 } + {} -> { a: "abc", b: 123 }""") {
           val query = """
             query QueryName {
               exampleObject(input: { a: "abc", b: 123 }) { a, b }
@@ -638,7 +637,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""{ a: null, b: 123 } + {} -> { a: null, b: 123 }""") {
+        test("""{ a: null, b: 123 } + {} -> { a: null, b: 123 }""") {
           val query = """
             query QueryName {
               exampleObject(input: { a: null, b: 123 }) { a, b }
@@ -660,7 +659,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""{ b: 123 } + {} -> { b: 123 }""") {
+        test("""{ b: 123 } + {} -> { b: 123 }""") {
           val query = """
             query QueryName {
               exampleObject(input: { b: 123 }) { a, b }
@@ -682,7 +681,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""{ a: $var, b: 123 } + { var: null } -> { a: null, b: 123 }""") {
+        test("""{ a: $var, b: 123 } + { var: null } -> { a: null, b: 123 }""") {
           val query = """
             query QueryName($var: String) {
               exampleObject(input: { a: $var, b: 123 }) { a, b }
@@ -705,7 +704,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""{ a: $var, b: 123 } + {} -> { a: null, b: 123 }""") {
+        test("""{ a: $var, b: 123 } + {} -> { a: null, b: 123 }""") {
           val query = """
             query QueryName($var: String) {
               exampleObject(input: { a: $var, b: 123 }) { a, b }
@@ -727,7 +726,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""{ b: $var } + { var: 123 } -> { b: 123 }""") {
+        test("""{ b: $var } + { var: 123 } -> { b: 123 }""") {
           val query = """
             query QueryName($var: Int!) {
               exampleObject(input: { b: $var }) { a, b }
@@ -750,7 +749,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""$var + { var: { b: 123 } } -> { b: 123 }""") {
+        test("""$var + { var: { b: 123 } } -> { b: 123 }""") {
           val query = """
             query QueryName($var: ExampleObjectInput!) {
               exampleObject(input: $var) { a, b }
@@ -773,7 +772,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM(""""abc123" + {} -> errors""") {
+        test(""""abc123" + {} -> errors""") {
           val query = """
             query QueryName {
               exampleObject(input: "abc123") { a, b }
@@ -791,7 +790,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""$var + { var: "abc123" } -> errors""") {
+        test("""$var + { var: "abc123" } -> errors""") {
           val query = """
             query QueryName($var: ExampleObjectInput!) {
               exampleObject(input: $var) { a, b }
@@ -810,7 +809,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""{ a: "abc", b: "123" } + {} -> errors""") {
+        test("""{ a: "abc", b: "123" } + {} -> errors""") {
           val query = """
             query QueryName {
               exampleObject(input: { a: "abc", b: "123" }) { a, b }
@@ -828,7 +827,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""{ a: "abc" } + {} -> errors""") {
+        test("""{ a: "abc" } + {} -> errors""") {
           val query = """
             query QueryName {
               exampleObject(input: { a: "abc" }) { a, b }
@@ -846,7 +845,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""{ b: $var } + {} -> errors""") {
+        test("""{ b: $var } + {} -> errors""") {
           val query = """
             query QueryName($var: Int!) {
               exampleObject(input: { b: $var }) { a, b }
@@ -864,7 +863,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""$var + { var: { a: "abc" } } -> errors""") {
+        test("""$var + { var: { a: "abc" } } -> errors""") {
           val query = """
             query QueryName($var: ExampleObjectInput) {
               exampleObject(input: $var) { a, b }
@@ -883,7 +882,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""{ a: "abc", b: null } + {} -> errors""") {
+        test("""{ a: "abc", b: null } + {} -> errors""") {
           val query = """
             query QueryName {
               exampleObject(input: { a: "abc", b: null }) { a, b }
@@ -901,7 +900,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""{ b: $var } + { var: null } -> errors""") {
+        test("""{ b: $var } + { var: null } -> errors""") {
           val query = """
             query QueryName($var: Int!) {
               exampleObject(input: { b: $var }) { a, b }
@@ -920,7 +919,7 @@ object InputArgumentSpec extends DefaultRunnableSpec {
             )
           )
         },
-        testM("""{ b: 123, c: "xyz" } + {} -> errors""") {
+        test("""{ b: 123, c: "xyz" } + {} -> errors""") {
           val query = """
             query QueryName {
               exampleObject(input: { b: 123, c: "xyz" }) { a, b }

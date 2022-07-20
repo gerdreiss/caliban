@@ -3,13 +3,10 @@ package caliban.reporting
 import caliban.client.CalibanClientError.CommunicationError
 import caliban.reporting.ReportingError.{ ClientError, RetryableError }
 import caliban.{ GraphQL, RootResolver }
-import zio.clock.Clock
-import zio.duration.durationInt
-import zio.test.environment.TestClock
-import zio.test.{ assertTrue, DefaultRunnableSpec, ZSpec }
-import zio.{ Has, IO, Promise, Ref, UIO, URIO, ZIO, ZLayer }
+import zio.test.{ assertTrue, TestClock, ZIOSpecDefault }
+import zio._
 
-object ReportingDaemonSpec extends DefaultRunnableSpec {
+object ReportingDaemonSpec extends ZIOSpecDefault {
   case class User(id: Int, name: Option[String])
   case class Query(
     a: String,
@@ -20,7 +17,7 @@ object ReportingDaemonSpec extends DefaultRunnableSpec {
     RootResolver(
       Query(
         "hello",
-        UIO.succeed(User(42, Some("bar")))
+        ZIO.succeed(User(42, Some("bar")))
       )
     )
   )
@@ -51,27 +48,28 @@ object ReportingDaemonSpec extends DefaultRunnableSpec {
 
     def whenReport(
       f: (SchemaReportingRef[_], Boolean, List[Invocation]) => IO[ReportingError, ReportingResponse]
-    ): URIO[Has[FakeSchemaReporter], Unit] =
-      ZIO.serviceWith(_.whenReport(f))
+    ): URIO[FakeSchemaReporter, Unit] =
+      ZIO.serviceWithZIO(_.whenReport(f))
 
     val defaultResponse: (SchemaReportingRef[_], Boolean, List[Invocation]) => IO[ReportingError, ReportingResponse] =
-      (_, _, _) => UIO.succeed(ReportingResponse(false, 0.seconds))
+      (_, _, _) => ZIO.succeed(ReportingResponse(false, 0.seconds))
 
     def live(
       respond: (SchemaReportingRef[_], Boolean, List[Invocation]) => IO[ReportingError, ReportingResponse] =
         defaultResponse
-    ): ZLayer[Any, Nothing, Has[FakeSchemaReporter] with Has[SchemaReporter]] =
-      (for {
+    ): ZLayer[Any, Nothing, FakeSchemaReporter with SchemaReporter] = ZLayer.fromZIOEnvironment {
+      for {
         _invocations <- Ref.make[List[Invocation]](Nil)
         r            <- Ref.make(respond)
       } yield {
         val reporter = new FakeSchemaReporter(_invocations, r)
 
-        Has.allOf[FakeSchemaReporter, SchemaReporter](reporter, reporter)
-      }).toLayerMany
+        ZEnvironment[FakeSchemaReporter, SchemaReporter](reporter, reporter)
+      }
+    }
 
-    def invocations: URIO[Has[FakeSchemaReporter], List[Invocation]] =
-      URIO.serviceWith(_.invocations)
+    def invocations: URIO[FakeSchemaReporter, List[Invocation]] =
+      ZIO.serviceWithZIO(_.invocations)
 
   }
 
@@ -86,51 +84,51 @@ object ReportingDaemonSpec extends DefaultRunnableSpec {
   // Call returns a 200 requesting the schema on the next call (without delay)
   // Call returns a 200 without requesting schema on the next call (with delay).
 
-  override def spec: ZSpec[_root_.zio.test.environment.TestEnvironment, Any] = suite("SchemaReporting")(
-    testM("non-2xx response should retry after 20 seconds")(
+  override def spec = suite("SchemaReporting")(
+    test("non-2xx response should retry after 20 seconds")(
       for {
         ref   <- schemaRef
         latch <- Promise.make[Nothing, Unit]
         _     <- fakeReport(ZIO.fail(RetryableError(CommunicationError("404"))))
-        _     <- ReportingDaemon.register(ref).use_(latch.await).fork
+        _     <- ZIO.scoped(ReportingDaemon.register(ref) *> latch.await).fork
         _     <- TestClock.adjust(1.minute)
         _     <- latch.succeed(())
         c     <- FakeSchemaReporter.invocations
       } yield assertTrue(c.size == 4)
     ),
-    testM("Receiving a schema error should halt the process")(
+    test("Receiving a schema error should halt the process")(
       for {
         ref   <- schemaRef
         latch <- Promise.make[Nothing, Unit]
         _     <- fakeReport(ZIO.fail(ClientError(CommunicationError("404"))))
-        _     <- ReportingDaemon.register(ref).use_(latch.await).fork
+        _     <- ZIO.scoped(ReportingDaemon.register(ref) *> latch.await).fork
         _     <- TestClock.adjust(1.minute) *> latch.succeed(())
         c     <- FakeSchemaReporter.invocations
       } yield assertTrue(c.size == 1)
     ),
-    testM("If true was received then next request should send the schema")(for {
+    test("If true was received then next request should send the schema")(for {
       ref   <- schemaRef
       latch <- Promise.make[Nothing, Unit]
       _     <- FakeSchemaReporter.whenReport {
                  case (_, _, prev) if prev.isEmpty => ZIO.succeed(ReportingResponse(true, 10.seconds))
                  case _                            => ZIO.succeed(ReportingResponse(false, 60.seconds))
                }
-      _     <- ReportingDaemon.register(ref).use_(latch.await).fork
+      _     <- ZIO.scoped(ReportingDaemon.register(ref) *> latch.await).fork
       c1    <- TestClock.adjust(5.seconds) *> FakeSchemaReporter.invocations
       _     <- TestClock.adjust(1.minute) *> latch.succeed(())
       c2    <- FakeSchemaReporter.invocations
     } yield assertTrue(c1.size == 1) && assertTrue(c2.size == 2)),
-    testM("If false was received the next payload shouldn't include the schema")(for {
+    test("If false was received the next payload shouldn't include the schema")(for {
       ref   <- schemaRef
       latch <- Promise.make[Nothing, Unit]
       _     <- FakeSchemaReporter.whenReport {
-                 case (_, _, prev) if prev.isEmpty => UIO.succeed(ReportingResponse(false, 10.seconds))
-                 case _                            => UIO.succeed(ReportingResponse(false, 60.seconds))
+                 case (_, _, prev) if prev.isEmpty => ZIO.succeed(ReportingResponse(false, 10.seconds))
+                 case _                            => ZIO.succeed(ReportingResponse(false, 60.seconds))
                }
-      _     <- ReportingDaemon.register(ref).use_(latch.await).fork
+      _     <- ZIO.scoped(ReportingDaemon.register(ref) *> latch.await).fork
       c1    <- TestClock.adjust(5.seconds) *> FakeSchemaReporter.invocations
       _     <- TestClock.adjust(1.minute) *> latch.succeed(())
       c2    <- FakeSchemaReporter.invocations
     } yield assertTrue(c1.size == 1) && assertTrue(c2.size == 2))
-  ).provideCustomLayer((Clock.any ++ FakeSchemaReporter.live()) >+> ReportingDaemon.live)
+  ).provideCustomLayer(FakeSchemaReporter.live() >+> ReportingDaemon.live)
 }
