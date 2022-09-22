@@ -3,10 +3,10 @@ import sbtcrossproject.CrossPlugin.autoImport.{ crossProject, CrossType }
 
 val scala212 = "2.12.16"
 val scala213 = "2.13.8"
-val scala3   = "3.1.3"
+val scala3   = "3.2.0"
 val allScala = Seq(scala212, scala213, scala3)
 
-val akkaVersion               = "2.6.19"
+val akkaVersion               = "2.6.20"
 val catsEffect3Version        = "3.3.14"
 val catsMtlVersion            = "1.2.1"
 val circeVersion              = "0.14.2"
@@ -15,17 +15,17 @@ val laminextVersion           = "0.14.3"
 val magnoliaVersion           = "0.17.0"
 val mercatorVersion           = "0.2.1"
 val playVersion               = "2.8.16"
-val playJsonVersion           = "2.9.2"
-val scalafmtVersion           = "3.5.8"
-val sttpVersion               = "3.7.2"
-val tapirVersion              = "1.0.3"
-val zioVersion                = "2.0.0"
+val playJsonVersion           = "2.9.3"
+val scalafmtVersion           = "3.5.9"
+val sttpVersion               = "3.8.0"
+val tapirVersion              = "1.1.0"
+val zioVersion                = "2.0.2"
 val zioInteropCats2Version    = "22.0.0.0"
 val zioInteropCats3Version    = "3.3.0"
 val zioInteropReactiveVersion = "2.0.0"
 val zioConfigVersion          = "3.0.2"
 val zqueryVersion             = "0.3.1"
-val zioJsonVersion            = "0.3.0-RC10"
+val zioJsonVersion            = "0.3.0-RC11"
 val zioHttpVersion            = "2.0.0-RC10"
 
 inThisBuild(
@@ -158,7 +158,7 @@ lazy val tools = project
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
     libraryDependencies ++= Seq(
       "org.scalameta"                  % "scalafmt-interfaces"           % scalafmtVersion,
-      "io.get-coursier"                % "interface"                     % "1.0.8",
+      "io.get-coursier"                % "interface"                     % "1.0.9",
       "com.softwaremill.sttp.client3" %% "zio"                           % sttpVersion,
       "com.softwaremill.sttp.client3" %% "async-http-client-backend-zio" % sttpVersion,
       "dev.zio"                       %% "zio-config"                    % zioConfigVersion,
@@ -305,7 +305,7 @@ lazy val akkaHttp = project
     crossScalaVersions -= scala3,
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
     libraryDependencies ++= Seq(
-      "com.typesafe.akka"             %% "akka-http"                  % "10.2.9",
+      "com.typesafe.akka"             %% "akka-http"                  % "10.2.10",
       "com.typesafe.akka"             %% "akka-serialization-jackson" % akkaVersion,
       "com.softwaremill.sttp.tapir"   %% "tapir-akka-http-server"     % tapirVersion,
       compilerPlugin(("org.typelevel" %% "kind-projector"             % "0.13.2").cross(CrossVersion.full))

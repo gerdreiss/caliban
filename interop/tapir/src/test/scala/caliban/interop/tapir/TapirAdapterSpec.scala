@@ -44,7 +44,7 @@ object TapirAdapterSpec {
     httpUri: Uri,
     uploadUri: Option[Uri] = None,
     wsUri: Option[Uri] = None
-  ): Spec[TestEnvironment with TestService, Throwable] = suite(label) {
+  ): Spec[TestService, Throwable] = suite(label) {
     val run       =
       SttpClientInterpreter()
         .toRequestThrowDecodeFailures(TapirAdapter.makeHttpEndpoints[CalibanError].head, Some(httpUri))
@@ -57,7 +57,7 @@ object TapirAdapterSpec {
         .toRequestThrowDecodeFailures(TapirAdapter.makeWebSocketEndpoint, Some(wsUri))
     )
 
-    val tests: List[Option[Spec[Live with SttpBackend[Task, ZioStreams with WebSockets], Throwable]]] = List(
+    val tests: List[Option[Spec[SttpBackend[Task, ZioStreams with WebSockets], Throwable]]] = List(
       Some(
         suite("http")(
           test("test http endpoint") {
@@ -243,14 +243,16 @@ object TapirAdapterSpec {
                                    .delay(3 seconds)
                                }
                 stop         = inputQueue.offer(GraphQLWSInput(Ops.Complete, Some("id"), None))
+                ping         = inputQueue.offer(GraphQLWSInput(Ops.Ping, Some("id"), None))
                 messages    <- outputStream
                                  .tap(out =>
                                    ZIO.whenCase(out) {
                                      case Right(out) if out.`type` == Ops.ConnectionAck => sendDelete
-                                     case Right(out) if out.`type` == Ops.Next          => stop
+                                     case Right(out) if out.`type` == Ops.Next          => ping
+                                     case Right(out) if out.`type` == Ops.Pong          => stop
                                    }
                                  )
-                                 .take(3)
+                                 .take(4)
                                  .runCollect
               } yield messages
 
@@ -259,7 +261,8 @@ object TapirAdapterSpec {
               assertTrue(
                 messages(1).map(_.payload.get.toString) == Right("""{"data":{"characterDeleted":"Amos Burton"}}""")
               ) &&
-              assertTrue(messages(2).map(_.`type`) == Right(Ops.Complete))
+              assertTrue(messages(2).map(_.`type`) == Right(Ops.Pong)) &&
+              assertTrue(messages(3).map(_.`type`) == Right(Ops.Complete))
             }
           } @@ TestAspect.timeout(60.seconds)
         )
@@ -267,7 +270,7 @@ object TapirAdapterSpec {
     )
 
     ZIO.succeed(tests.flatten)
-  }.provideCustomLayerShared(AsyncHttpClientZioBackend.layer()) @@ before(
-    TestService.reset
-  ) @@ TestAspect.sequential
+  }.provideLayerShared(AsyncHttpClientZioBackend.layer()) @@
+    before(TestService.reset) @@
+    TestAspect.sequential
 }
